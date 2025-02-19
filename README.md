@@ -1,7 +1,3 @@
-Here's the updated README based on the latest changes to the code:
-
----
-
 # Data Dictionary Generator
 
 A Python package to automatically generate data dictionaries for clinical datasets using a large language model (LLM) via Ollama. This tool takes in dataset files (CSV format), processes them, and generates descriptions for each column in the dataset, as well as other metadata like data types, sample data, and table descriptions.
