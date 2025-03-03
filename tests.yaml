@@ -1,4 +1,4 @@
-name: Runs pytest
+name: Run pytest
 
 on:
   push:
