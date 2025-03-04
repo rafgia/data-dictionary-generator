@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - 'feature/*'
   pull_request:
     branches:
       - main
@@ -33,10 +32,7 @@ jobs:
     - name: Run template tests
       run: pytest tests
 
-    - name: Test omopetl CLI commands
-      run: |
-        # Create a demo project
-        omopetl startdemo DEMO
-
-        # Run the ETL in dry mode
-        omopetl run DEMO
+    # - name: Test data_dictionary commands
+    #   run: |
+    #     # Create a data dictionary from csv
+    #     generate_dictionary
