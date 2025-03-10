@@ -4,3 +4,4 @@ ollama==0.1.0
 torch==2.2.0
 transformers==4.27.0
 click==8.1.7
+tokenizers==0.13.3
