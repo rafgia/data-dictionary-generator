@@ -10,4 +10,4 @@ authors = ["Raffaele Giancotti <raf95@mit.edu>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-tokenizers = "0.13.3"
+tokenizers = "^0.12.1"
