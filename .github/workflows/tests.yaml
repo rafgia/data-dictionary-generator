@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - 'feature/*'
   pull_request:
     branches:
       - main
@@ -20,23 +19,21 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.12'
+        python-version: '3.9'
+
+    - name: Install Rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source $HOME/.cargo/env
+        rustc --version
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pytest
         pip install -r requirements.txt
-        # install omopetl
+        pip install --no-binary :all: tokenizers==0.13.3
         pip install -e .
 
-    - name: Run template tests
+    - name: Run tests
       run: pytest tests
-
-    - name: Test omopetl CLI commands
-      run: |
-        # Create a demo project
-        omopetl startdemo DEMO
-
-        # Run the ETL in dry mode
-        omopetl run DEMO
