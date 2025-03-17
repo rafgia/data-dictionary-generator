@@ -22,6 +22,11 @@ jobs:
       with:
         python-version: '3.12'
 
+    - name: Install Ollama
+      run: |
+        curl -sS https://ollama.com/install.sh | bash
+        export PATH=$HOME/.ollama:$PATH
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
