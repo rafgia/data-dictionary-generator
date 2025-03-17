@@ -1,5 +1,5 @@
 from click.testing import CliRunner
-from cli import generate_dictionary
+from data_dictionary_generator.cli import generate_dictionary
 
 
 def test_generate_dictionary_cli():
