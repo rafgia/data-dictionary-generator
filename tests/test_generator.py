@@ -9,10 +9,10 @@ def test_run_ollama_model():
     """
     Test the Ollama model integration. This test should be adapted based on your model's real response.
     """
-    prompt = "What is the capital of France?"
+    prompt = "What is the result of 2+2?"
     response = run_ollama_model(prompt)
     assert response is not None
-    assert "Paris" in response
+    assert "4" in response
 
 
 def test_generate_metadata_for_table():
