@@ -10,7 +10,7 @@ from pathlib import Path
 @click.argument("output_file")
 @click.option(
     "--model",
-    default="deepseek-r1:1.5b",
+    default="llama3.1",
     help="Ollama model to use for metadata generation.",
 )
 def generate_dictionary(
