@@ -22,7 +22,9 @@ def test_generate_metadata_for_table():
     df = pd.DataFrame({"column1": [1, 2, 3], "column2": ["a", "b", "c"]})
     table_name = "test_table"
     dataset_name = "test_dataset"
-    metadata = generate_metadata_for_table(df, table_name, dataset_name)
+    metadata = generate_metadata_for_table(
+        df, table_name, dataset_name, model="llama3.1"
+    )
 
     assert isinstance(metadata, pd.DataFrame)
     assert len(metadata) == len(df.columns)
