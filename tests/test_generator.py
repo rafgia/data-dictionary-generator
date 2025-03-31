@@ -12,7 +12,9 @@ def test_run_ollama_model():
     prompt = "What is the result of 2+2?"
     response = run_ollama_model(prompt)
     assert response is not None
-    assert "4" in response
+    assert any(
+        correct_answer in response.lower() for correct_answer in ["4", "four"]
+    ), f"Expected '4' or 'four' in response, got: {response}"
 
 
 def test_generate_metadata_for_table():
