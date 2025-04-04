@@ -198,18 +198,18 @@ def process_csv(
     dataset_name: str,
     model: str = "llama3.1",
     output_path: Optional[str] = ".",
-) -> Optional[pd.DataFrame]:
+) -> Optional[tuple]:
     """
-    Process a CSV file to generate concise metadata for the clinical data table.
+    Process a CSV file to generate concise metadata for the clinical data table and generate data quality report.
     """
     try:
         df = pd.read_csv(file_path)
         table_name = os.path.splitext(os.path.basename(file_path))[0]
         metadata = generate_metadata_for_table(df, table_name, dataset_name, model)
 
-        generate_data_quality_report(df, table_name)
+        quality_report = generate_data_quality_report(df, table_name)
 
-        return metadata
+        return metadata, quality_report
     except Exception as e:
         logger.error(f"Failed to process CSV {file_path}: {e}")
         return None

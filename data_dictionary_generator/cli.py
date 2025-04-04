@@ -70,10 +70,19 @@ def generate_dictionary(
         metadata, quality_report = result
 
         if metadata is not None:
-            all_metadata = pd.concat([all_metadata, metadata], ignore_index=True)
+            metadata_df = (
+                pd.DataFrame(metadata) if isinstance(metadata, list) else metadata
+            )
+            all_metadata = pd.concat([all_metadata, metadata_df], ignore_index=True)
+
         if quality_report is not None:
+            quality_report_df = (
+                pd.DataFrame(quality_report)
+                if isinstance(quality_report, list)
+                else quality_report
+            )
             all_quality_reports = pd.concat(
-                [all_quality_reports, quality_report], ignore_index=True
+                [all_quality_reports, quality_report_df], ignore_index=True
             )
 
     all_metadata.to_csv(output_file, index=False)
