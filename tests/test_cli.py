@@ -10,5 +10,6 @@ def test_generate_dictionary_cli():
     result = runner.invoke(
         generate_dictionary, ["tests/test_data", "test_dataset", "output.csv"]
     )
+    print(result.output)
     assert result.exit_code == 0
     assert "Metadata generation complete" in result.output
