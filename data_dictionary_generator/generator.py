@@ -193,15 +193,78 @@ def generate_data_quality_report(
     return data_quality_rows
 
 
+def generate_relationships_between_tables(
+    tables_metadata: List[Dict], model: str
+) -> pd.DataFrame:
+    """
+    Uses LLM model to detect relationships between tables.
+    For simplicity, we'll assume relationships are identified through shared column names or content similarity.
+    """
+    relationships = []
+
+    if not all(isinstance(metadata, dict) for metadata in tables_metadata):
+        logger.error("Expected a list of dictionaries, but found an incorrect format.")
+        return pd.DataFrame()
+
+    try:
+        table_names = list(
+            set([metadata["table_name"] for metadata in tables_metadata])
+        )
+    except KeyError as e:
+        logger.error(f"Missing expected key in metadata: {e}")
+        return pd.DataFrame()
+
+    for i, table1 in enumerate(table_names):
+        for j, table2 in enumerate(table_names):
+            if i >= j:
+                continue
+
+            table1_columns = {
+                metadata["column_name"]
+                for metadata in tables_metadata
+                if metadata["table_name"] == table1
+            }
+            table2_columns = {
+                metadata["column_name"]
+                for metadata in tables_metadata
+                if metadata["table_name"] == table2
+            }
+
+            common_columns = table1_columns.intersection(table2_columns)
+
+            if common_columns:
+                prompt = (
+                    f"Are the tables '{table1}' and '{table2}' related based on columns: {', '.join(common_columns)}? "
+                    "If so, describe the relationship in brief clinical terms (max 15 words)."
+                )
+                relationship_description = run_ollama_model(prompt, model)
+
+                if relationship_description:
+                    relationships.append(
+                        {
+                            "table1": table1,
+                            "table2": table2,
+                            "common_columns": ", ".join(common_columns),
+                            "relationship": relationship_description,
+                        }
+                    )
+
+    return pd.DataFrame(relationships)
+
+
 def process_csv(
     file_path: str,
     dataset_name: str,
     model: str = "llama3.1",
     output_path: Optional[str] = ".",
+    all_tables_metadata: Optional[List[Dict]] = None,  # Change here
 ) -> Optional[tuple]:
     """
-    Process a CSV file to generate concise metadata for the clinical data table and generate data quality report.
+    Process a CSV file to generate concise metadata for the clinical data table, generate data quality report,
+    and detect relationships between tables.
     """
+    if all_tables_metadata is None:  # Initialize the list if None is passed
+        all_tables_metadata = []
     try:
         df = pd.read_csv(file_path)
         table_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -209,7 +272,9 @@ def process_csv(
 
         quality_report = generate_data_quality_report(df, table_name)
 
-        return metadata, quality_report
+        all_tables_metadata.extend(metadata)
+
+        return metadata, quality_report, all_tables_metadata
     except Exception as e:
         logger.error(f"Failed to process CSV {file_path}: {e}")
         return None

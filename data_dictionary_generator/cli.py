@@ -1,9 +1,13 @@
 import click
-from data_dictionary_generator.generator import process_csv
+from data_dictionary_generator.generator import (
+    generate_relationships_between_tables,
+    process_csv,
+)
 import pandas as pd
 from pathlib import Path
 import logging
 from fpdf import FPDF
+from typing import List, Dict
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,17 +61,20 @@ def generate_dictionary(
     Generates a data dictionary for all CSV files in the FOLDER_PATH
     and saves it to OUTPUT_FILE in the specified FORMAT.
     """
-    all_metadata = pd.DataFrame()
-    all_quality_reports = pd.DataFrame()
+    all_metadata: pd.DataFrame = pd.DataFrame()
+    all_quality_reports: pd.DataFrame = pd.DataFrame()
+    all_tables_metadata: List[Dict] = []
 
     for file in Path(folder_path).glob("*.csv"):
-        result = process_csv(str(file), dataset_name, model)
+        result = process_csv(
+            str(file), dataset_name, model, all_tables_metadata=all_tables_metadata
+        )
 
         if result is None:
             logger.warning(f"Skipping {file.name} — process_csv returned None.")
             continue
 
-        metadata, quality_report = result
+        metadata, quality_report, all_tables_metadata = result
 
         if metadata is not None:
             metadata_df = (
@@ -85,13 +92,20 @@ def generate_dictionary(
                 [all_quality_reports, quality_report_df], ignore_index=True
             )
 
+    relationships_df = generate_relationships_between_tables(all_tables_metadata, model)
+
     all_metadata.to_csv(output_file, index=False)
-    print("Metadata generation complete")
     logger.info(f"Metadata dictionary saved to {output_file}")
 
     quality_output_path = Path(output_file).with_name("data_quality.csv")
     all_quality_reports.to_csv(quality_output_path, index=False)
     logger.info(f"Data quality report saved to {quality_output_path}")
+
+    relations_output_path = Path(output_file).with_name("relations.csv")
+    relationships_df.to_csv(relations_output_path, index=False)
+    logger.info(f"Relationships report saved to {relations_output_path}")
+
+    print("Metadata generation complete")
 
 
 if __name__ == "__main__":
