@@ -67,7 +67,7 @@ python cli.py <folder_path> <dataset_name> <output_file> --model <ollama_model> 
 2. **Run the generator**:
 
    ```bash
-   python cli.py data/MIMIC MIMIC metadata_output.csv --model deepseek-r1:1.5b --output-format pdf
+   python cli.py data/MIMIC MIMIC metadata_output.csv --model deepseek-r1:1.5b --output-format csv
    ```
 
 This will generate metadata for each column in the dataset and save it to a CSV file (`metadata_output.csv`).
