@@ -9,6 +9,7 @@ A Python package to automatically generate data dictionaries for clinical datase
 - Retrieve data type information using sample data for each column.
 - Support integration with Ollama LLM for generating metadata descriptions.
 - Option to save the generated metadata in CSV format.
+- Generates a `data_quality.csv` file containing a summary of the data quality for each column.
 
 ## Requirements
 
@@ -49,7 +50,7 @@ Once the package is installed, you can use the command line to generate metadata
 To run the tool, use the following command:
 
 ```bash
-python cli.py <folder_path> <dataset_name> <output_file> --model <ollama_model> --output-format <format>
+python cli.py <folder_path> <dataset_name> <output_file> --model <ollama_model> --format <format>
 ```
 
 #### Parameters:
@@ -57,7 +58,7 @@ python cli.py <folder_path> <dataset_name> <output_file> --model <ollama_model> 
 - `<dataset_name>`: The name of your dataset (e.g., `MIMIC`).
 - `<output_file>`: The name of the output CSV file where the metadata will be saved.
 - `--model`: (Optional) Specify the Ollama model to use for generating metadata (default is `deepseek-r1:1.5b`).
-- `--output-format`: where <format> can be one of csv, json, pdf, markdown. 
+- `--format`: where <format> can be one of csv, json, pdf, markdown (default is csv). 
 
 ### Example
 
@@ -67,7 +68,7 @@ python cli.py <folder_path> <dataset_name> <output_file> --model <ollama_model> 
 2. **Run the generator**:
 
    ```bash
-   python cli.py data/MIMIC MIMIC metadata_output.csv --model deepseek-r1:1.5b --output-format csv
+   python cli.py data/MIMIC MIMIC metadata_output.csv --model deepseek-r1:1.5b --format csv
    ```
 
 This will generate metadata for each column in the dataset and save it to a CSV file (`metadata_output.csv`).
@@ -93,6 +94,23 @@ For each **column** in your dataset:
 | patients   | ORCHID       | 1000     | 10          | Contains patient details.  | age        | [45, 60, 50, ...] | integer   | Age of the patient in years. |
 | results    | ORCHID       | 500      | 6           | Stores test result data.   | result     | [positive, ...]   | string    | The result of the test.      |
 
+## Data quality report
+
+In addition to the data dictionary, the tool also generates a file called `data_quality.csv`. This file provides a summary of the data quality for each column, including the following information:
+
+| column_name | num_missing_values | num_unique_values | data_type | data_quality_score | data_quality_description |
+|-------------|--------------------|-------------------|-----------|--------------------|--------------------------|
+| age         | 0                  | 10                | integer   | 1.0                | No missing values.       |
+| result      | 5                  | 3                 | string    | 0.95               | Some missing values.     |
+
+Where:
+- **num_missing_values**: The number of missing values in the column.
+- **num_unique_values**: The number of unique values in the column.
+- **data_type**: The inferred data type of the column (e.g., integer, float, string).
+- **data_quality_score**: A score (between 0 and 1) representing the quality of the column based on the completeness and diversity of data.
+- **data_quality_description**: A text description of the data quality, such as the presence of missing values or the number of unique values.
+
+This file can be used to assess the overall quality of your dataset, making it easier to identify columns that may require cleaning or further attention.
 
 ## Troubleshooting
 
