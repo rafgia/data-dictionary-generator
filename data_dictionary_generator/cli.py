@@ -2,8 +2,11 @@ import click
 from data_dictionary_generator.generator import process_csv
 import pandas as pd
 from pathlib import Path
+import logging
+from fpdf import FPDF
 
-from fpdf import FPDF  # for PDF output
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def save_as_pdf(df: pd.DataFrame, output_file: str) -> None:
@@ -20,7 +23,7 @@ def save_as_pdf(df: pd.DataFrame, output_file: str) -> None:
 
     for _, row in df.iterrows():
         for i, col in enumerate(df.columns):
-            value = str(row[col])[:25]  # Truncate long fields
+            value = str(row[col])[:25]
             pdf.cell(col_widths[i], 10, value, border=1)
         pdf.ln()
 
@@ -55,23 +58,31 @@ def generate_dictionary(
     and saves it to OUTPUT_FILE in the specified FORMAT.
     """
     all_metadata = pd.DataFrame()
+    all_quality_reports = pd.DataFrame()
+
     for file in Path(folder_path).glob("*.csv"):
-        metadata = process_csv(str(file), dataset_name, model)
+        result = process_csv(str(file), dataset_name, model)
+
+        if result is None:
+            logger.warning(f"Skipping {file.name} — process_csv returned None.")
+            continue
+
+        metadata, quality_report = result
+
         if metadata is not None:
             all_metadata = pd.concat([all_metadata, metadata], ignore_index=True)
+        if quality_report is not None:
+            all_quality_reports = pd.concat(
+                [all_quality_reports, quality_report], ignore_index=True
+            )
 
-    if format == "csv":
-        all_metadata.to_csv(output_file, index=False)
-    elif format == "json":
-        all_metadata.to_json(output_file, orient="records", indent=2)
-    elif format == "markdown":
-        save_as_markdown(all_metadata, output_file)
-    elif format == "pdf":
-        save_as_pdf(all_metadata, output_file)
+    all_metadata.to_csv(output_file, index=False)
+    print("Metadata generation complete")
+    logger.info(f"Metadata dictionary saved to {output_file}")
 
-    click.echo(
-        f"Metadata generation complete. Saved as {format.upper()} to {output_file}"
-    )
+    quality_output_path = Path(output_file).with_name("data_quality.csv")
+    all_quality_reports.to_csv(quality_output_path, index=False)
+    logger.info(f"Data quality report saved to {quality_output_path}")
 
 
 if __name__ == "__main__":
