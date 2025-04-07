@@ -1,7 +1,7 @@
 import os
 import argparse
 import pandas as pd
-from generator import (
+from data_dictionary_generator.generator import (
     process_csv,
     generate_relationships_between_tables,
     save_relationships_to_markdown,
