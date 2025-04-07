@@ -1,112 +1,108 @@
-import click
-from data_dictionary_generator.generator import (
-    generate_relationships_between_tables,
-    process_csv,
-)
+import os
+import argparse
 import pandas as pd
-from pathlib import Path
-import logging
-from fpdf import FPDF
-from typing import List, Dict
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-def save_as_pdf(df: pd.DataFrame, output_file: str) -> None:
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    pdf.set_font("Arial", size=10)
-
-    col_widths = [30] * len(df.columns)
-
-    for i, col in enumerate(df.columns):
-        pdf.cell(col_widths[i], 10, col, border=1)
-    pdf.ln()
-
-    for _, row in df.iterrows():
-        for i, col in enumerate(df.columns):
-            value = str(row[col])[:25]
-            pdf.cell(col_widths[i], 10, value, border=1)
-        pdf.ln()
-
-    pdf.output(output_file)
-
-
-def save_as_markdown(df: pd.DataFrame, output_file: str) -> None:
-    with open(output_file, "w") as f:
-        f.write(df.to_markdown(index=False))
-
-
-@click.command()
-@click.argument("folder_path")
-@click.argument("dataset_name")
-@click.argument("output_file")
-@click.option(
-    "--model",
-    default="llama3.1",
-    help="Ollama model to use for metadata generation.",
+from generator import (
+    process_csv,
+    generate_relationships_between_tables,
+    save_relationships_to_markdown,
 )
-@click.option(
-    "--format",
-    default="csv",
-    type=click.Choice(["csv", "json", "markdown", "pdf"]),
-    help="Output format for the data dictionary.",
-)
-def generate_dictionary(
-    folder_path: str, dataset_name: str, output_file: str, model: str, format: str
+
+
+def save_metadata_in_format(
+    metadata_df: pd.DataFrame, format: str, output_file: str
 ) -> None:
-    """
-    Generates a data dictionary for all CSV files in the FOLDER_PATH
-    and saves it to OUTPUT_FILE in the specified FORMAT.
-    """
-    all_metadata: pd.DataFrame = pd.DataFrame()
-    all_quality_reports: pd.DataFrame = pd.DataFrame()
-    all_tables_metadata: List[Dict] = []
+    if format == "csv":
+        metadata_df.to_csv(output_file, index=False)
+    elif format == "json":
+        metadata_df.to_json(output_file, orient="records", lines=True)
+    elif format == "pdf":
+        print("PDF format is not implemented yet.")
+    elif format == "markdown":
+        with open(output_file, "w") as f:
+            f.write("# Metadata\n")
+            for _, row in metadata_df.iterrows():
+                f.write(f"## {row['table_name']} - {row['column_name']}\n")
+                f.write(f"- **Description**: {row['column_description']}\n")
+                f.write(f"- **Data Type**: {row['datatype']}\n")
+                f.write(f"- **Sample Data**: {row['sample_data']}\n")
+                f.write("\n")
+    else:
+        print(f"Unsupported format: {format}")
 
-    for file in Path(folder_path).glob("*.csv"):
-        result = process_csv(
-            str(file), dataset_name, model, all_tables_metadata=all_tables_metadata
-        )
 
-        if result is None:
-            logger.warning(f"Skipping {file.name} — process_csv returned None.")
-            continue
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate metadata and relationships from clinical CSV files."
+    )
+    parser.add_argument("data_dir", type=str, help="Directory with CSV files.")
+    parser.add_argument(
+        "--dataset_name", type=str, required=True, help="Name of the dataset."
+    )
+    parser.add_argument(
+        "--model", type=str, default="llama3.1", help="LLM model to use."
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="output",
+        help="Directory to save metadata and reports.",
+    )
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="csv",
+        choices=["csv", "json", "pdf", "markdown"],
+        help="Output format.",
+    )
 
-        metadata, quality_report, all_tables_metadata = result
+    args = parser.parse_args()
 
-        if metadata is not None:
-            metadata_df = (
-                pd.DataFrame(metadata) if isinstance(metadata, list) else metadata
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    all_metadata = []
+    all_quality_reports = []
+
+    for file in os.listdir(args.data_dir):
+        if file.endswith(".csv"):
+            file_path = os.path.join(args.data_dir, file)
+            result = process_csv(
+                file_path, args.dataset_name, args.model, args.output_dir, all_metadata
             )
-            all_metadata = pd.concat([all_metadata, metadata_df], ignore_index=True)
+            if result:
+                metadata, quality_report, _ = result
+                base_filename = os.path.splitext(file)[0]
 
-        if quality_report is not None:
-            quality_report_df = (
-                pd.DataFrame(quality_report)
-                if isinstance(quality_report, list)
-                else quality_report
-            )
-            all_quality_reports = pd.concat(
-                [all_quality_reports, quality_report_df], ignore_index=True
-            )
+                metadata_file = os.path.join(
+                    args.output_dir, f"{base_filename}_metadata.{args.format}"
+                )
+                save_metadata_in_format(
+                    pd.DataFrame(metadata), args.format, metadata_file
+                )
 
-    relationships_df = generate_relationships_between_tables(all_tables_metadata, model)
+                quality_df = pd.DataFrame(quality_report)
+                quality_df = quality_df[quality_df["column_name"] != "ALL_COLUMNS"]
+                quality_file = os.path.join(
+                    args.output_dir, f"{base_filename}_quality.csv"
+                )
+                quality_df.to_csv(quality_file, index=False)
 
-    all_metadata.to_csv(output_file, index=False)
-    logger.info(f"Metadata dictionary saved to {output_file}")
+                all_quality_reports.extend(
+                    [r for r in quality_report if r["column_name"] != "ALL_COLUMNS"]
+                )
 
-    quality_output_path = Path(output_file).with_name("data_quality.csv")
-    all_quality_reports.to_csv(quality_output_path, index=False)
-    logger.info(f"Data quality report saved to {quality_output_path}")
+    relationships_df = generate_relationships_between_tables(
+        all_metadata, args.data_dir
+    )
+    relationships_file = os.path.join(args.output_dir, f"relationships.{args.format}")
+    relationships_csv = os.path.join(args.output_dir, "relationships.csv")
+    relationships_md = os.path.join(args.output_dir, "relationships.md")
 
-    relations_output_path = Path(output_file).with_name("relations.csv")
-    relationships_df.to_csv(relations_output_path, index=False)
-    logger.info(f"Relationships report saved to {relations_output_path}")
+    save_metadata_in_format(relationships_df, args.format, relationships_file)
+    relationships_df.to_csv(relationships_csv, index=False)
+    save_relationships_to_markdown(relationships_df, relationships_md)
 
-    print("Metadata generation complete")
+    print(f"\nDone! All files saved in '{args.output_dir}'")
 
 
 if __name__ == "__main__":
-    generate_dictionary()
+    main()

@@ -5,9 +5,14 @@ import logging
 import re
 from typing import Optional, List, Dict
 import numpy as np
+from sentence_transformers import SentenceTransformer, util
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mutual_info_score
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
 def run_ollama_model(prompt: str, model: str = "llama3.1") -> Optional[str]:
@@ -194,62 +199,97 @@ def generate_data_quality_report(
 
 
 def generate_relationships_between_tables(
-    tables_metadata: List[Dict], model: str
+    tables_metadata: List[Dict], data_path: str, model_name: str = "all-MiniLM-L6-v2"
 ) -> pd.DataFrame:
     """
-    Uses LLM model to detect relationships between tables.
-    For simplicity, we'll assume relationships are identified through shared column names or content similarity.
+    Generates relationships between tables using semantic similarity, mutual information,
+    and estimated cardinality.
     """
+    df_meta = pd.DataFrame(tables_metadata)
+    grouped = df_meta.groupby("table_name")
+    table_columns = {table: group["column_name"].tolist() for table, group in grouped}
+
     relationships = []
 
-    if not all(isinstance(metadata, dict) for metadata in tables_metadata):
-        logger.error("Expected a list of dictionaries, but found an incorrect format.")
-        return pd.DataFrame()
-
-    try:
-        table_names = list(
-            set([metadata["table_name"] for metadata in tables_metadata])
-        )
-    except KeyError as e:
-        logger.error(f"Missing expected key in metadata: {e}")
-        return pd.DataFrame()
-
-    for i, table1 in enumerate(table_names):
-        for j, table2 in enumerate(table_names):
-            if i >= j:
+    for table_a, columns_a in table_columns.items():
+        for table_b, columns_b in table_columns.items():
+            if table_a >= table_b:
                 continue
+            for col_a in columns_a:
+                for col_b in columns_b:
+                    name_score = semantic_similarity(col_a, col_b)
+                    if name_score > 0.75:
+                        try:
+                            df_a = pd.read_csv(
+                                os.path.join(data_path, f"{table_a}.csv")
+                            )
+                            df_b = pd.read_csv(
+                                os.path.join(data_path, f"{table_b}.csv")
+                            )
 
-            table1_columns = {
-                metadata["column_name"]
-                for metadata in tables_metadata
-                if metadata["table_name"] == table1
-            }
-            table2_columns = {
-                metadata["column_name"]
-                for metadata in tables_metadata
-                if metadata["table_name"] == table2
-            }
+                            if col_a not in df_a.columns or col_b not in df_b.columns:
+                                continue
 
-            common_columns = table1_columns.intersection(table2_columns)
+                            values_a = df_a[col_a].dropna().astype(str).tolist()
+                            values_b = df_b[col_b].dropna().astype(str).tolist()
 
-            if common_columns:
-                prompt = (
-                    f"Are the tables '{table1}' and '{table2}' related based on columns: {', '.join(common_columns)}? "
-                    "If so, describe the relationship in brief clinical terms (max 15 words)."
-                )
-                relationship_description = run_ollama_model(prompt, model)
+                            mutual_info = compute_mutual_information(values_a, values_b)
+                            cardinality = estimate_cardinality(values_a, values_b)
 
-                if relationship_description:
-                    relationships.append(
-                        {
-                            "table1": table1,
-                            "table2": table2,
-                            "common_columns": ", ".join(common_columns),
-                            "relationship": relationship_description,
-                        }
-                    )
+                            confidence = 0.4 * name_score + 0.6 * min(mutual_info, 1.0)
+
+                            relationships.append(
+                                {
+                                    "table_a": table_a,
+                                    "column_a": col_a,
+                                    "table_b": table_b,
+                                    "column_b": col_b,
+                                    "semantic_similarity": round(name_score, 3),
+                                    "mutual_info": round(mutual_info, 3),
+                                    "cardinality": cardinality,
+                                    "confidence": round(confidence, 3),
+                                }
+                            )
+
+                        except Exception as e:
+                            logger.warning(
+                                f"Error processing {table_a}.{col_a} and {table_b}.{col_b}: {e}"
+                            )
+                            continue
 
     return pd.DataFrame(relationships)
+
+
+def semantic_similarity(col1: str, col2: str) -> float:
+    embedding1 = model.encode(col1, convert_to_tensor=True)
+    embedding2 = model.encode(col2, convert_to_tensor=True)
+    score = util.pytorch_cos_sim(embedding1, embedding2).item()
+    return score
+
+
+def estimate_cardinality(col_a_vals: List[str], col_b_vals: List[str]) -> str:
+    unique_a = len(set(col_a_vals))
+    unique_b = len(set(col_b_vals))
+    if unique_a == 0 or unique_b == 0:
+        return "Unknown"
+    ratio = unique_a / unique_b
+    if 0.9 < ratio < 1.1:
+        return "One-to-One"
+    elif ratio < 0.9:
+        return "Many-to-One"
+    else:
+        return "One-to-Many"
+
+
+def compute_mutual_information(col_a_vals: List[str], col_b_vals: List[str]) -> float:
+    try:
+        le = LabelEncoder()
+        a_encoded = le.fit_transform(col_a_vals)
+        b_encoded = le.fit_transform(col_b_vals)
+        return mutual_info_score(a_encoded, b_encoded)
+    except ValueError as e:
+        logger.warning(f"ValueError in mutual info calculation: {e}")
+        return 0.0
 
 
 def process_csv(
@@ -257,24 +297,40 @@ def process_csv(
     dataset_name: str,
     model: str = "llama3.1",
     output_path: Optional[str] = ".",
-    all_tables_metadata: Optional[List[Dict]] = None,  # Change here
+    all_tables_metadata: Optional[List[Dict]] = None,
 ) -> Optional[tuple]:
     """
     Process a CSV file to generate concise metadata for the clinical data table, generate data quality report,
     and detect relationships between tables.
     """
-    if all_tables_metadata is None:  # Initialize the list if None is passed
-        all_tables_metadata = []
     try:
         df = pd.read_csv(file_path)
         table_name = os.path.splitext(os.path.basename(file_path))[0]
-        metadata = generate_metadata_for_table(df, table_name, dataset_name, model)
+        metadata_df = generate_metadata_for_table(df, table_name, dataset_name, model)
+
+        metadata = metadata_df.to_dict("records")
+
+        if all_tables_metadata is not None:
+            all_tables_metadata.extend(metadata)
 
         quality_report = generate_data_quality_report(df, table_name)
-
-        all_tables_metadata.extend(metadata)
-
-        return metadata, quality_report, all_tables_metadata
+        return metadata_df, quality_report, all_tables_metadata
     except Exception as e:
         logger.error(f"Failed to process CSV {file_path}: {e}")
         return None
+
+
+def save_relationships_to_markdown(df: pd.DataFrame, output_path: str):
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    lines = ["# Detected Table Relationships\n"]
+    for _, rel in df.sort_values(by="confidence", ascending=False).iterrows():
+        lines.append(
+            f"## {rel['table_a']}.{rel['column_a']} ↔ {rel['table_b']}.{rel['column_b']}"
+        )
+        lines.append(f"- **Semantic Similarity**: {rel['semantic_similarity']}")
+        lines.append(f"- **Mutual Information**: {rel['mutual_info']}")
+        lines.append(f"- **Cardinality**: {rel['cardinality']}")
+        lines.append(f"- **Confidence Score**: {rel['confidence']}\n")
+
+    with open(output_path, "w") as f:
+        f.write("\n".join(lines))

@@ -1,15 +1,22 @@
 # Data Dictionary Generator
 
-A Python package to automatically generate data dictionaries for clinical datasets using a large language model (LLM) via Ollama. This tool takes in dataset files (CSV format), processes them, and generates descriptions for each column in the dataset, as well as other metadata like data types, sample data, and table descriptions.
+A Python package to automatically generate data dictionaries for clinical datasets using a large language model (LLM) via Ollama. This tool takes in dataset files (CSV format), processes them, and generates descriptions for each column in the dataset, as well as other metadata like data types, sample data, table descriptions and some quality information such as missing values, outliers and redundant values. It is also able to find relationships between tables and columns.
 
 ## Features
-- Automatically generate descriptions for each column in a dataset.
-- Handle multiple CSV files in a folder.
-- Generate table-level descriptions along with column descriptions.
-- Retrieve data type information using sample data for each column.
-- Support integration with Ollama LLM for generating metadata descriptions.
-- Option to save the generated metadata in CSV format.
-- Generates a `data_quality.csv` file containing a summary of the data quality for each column.
+### Metadata Generation
+- **Column Descriptions**: AI-generated clinical context for each field
+- **Table Summaries**: Dataset-level documentation
+- **Smart Sampling**: Automatic data type detection with sample values
+
+### Quality Analysis
+- Missing value statistics
+- Outlier detection (numeric fields)
+- Duplicate row/column identification
+
+### Advanced Capabilities
+- **Semantic Relationship Detection**: Finds connected columns across tables
+- **Multi-Format Outputs**: CSV, JSON, Markdown, and PDF
+- **Custom LLM Integration**: Supports any Ollama model
 
 ## Requirements
 
@@ -50,15 +57,15 @@ Once the package is installed, you can use the command line to generate metadata
 To run the tool, use the following command:
 
 ```bash
-python cli.py <folder_path> <dataset_name> <output_file> --model <ollama_model> --format <format>
+python cli.py <folder_path> <dataset_name> <output_dir> --model <ollama_model> --format <format>
 ```
 
 #### Parameters:
 - `<folder_path>`: The path to the folder containing your CSV files.
 - `<dataset_name>`: The name of your dataset (e.g., `MIMIC`).
-- `<output_file>`: The name of the output CSV file where the metadata will be saved.
+- `<output_dir>`: The name of the path where the metadata will be saved.
 - `--model`: (Optional) Specify the Ollama model to use for generating metadata (default is `deepseek-r1:1.5b`).
-- `--format`: where <format> can be one of csv, json, pdf, markdown (default is csv). 
+- `--format`: where <format> can be one of csv, json, pdf, markdown (default is csv).
 
 ### Example
 
@@ -68,7 +75,7 @@ python cli.py <folder_path> <dataset_name> <output_file> --model <ollama_model> 
 2. **Run the generator**:
 
    ```bash
-   python cli.py data/MIMIC MIMIC metadata_output.csv --model deepseek-r1:1.5b --format csv
+   python cli.py data/MIMIC --dataset_name MIMIC --output_dir output --model deepseek-r1:1.5b --format csv
    ```
 
 This will generate metadata for each column in the dataset and save it to a CSV file (`metadata_output.csv`).
@@ -89,28 +96,56 @@ For each **column** in your dataset:
 
 ### Example of generated metadata:
 
-| table_name | dataset_name | num_rows | num_columns | table_description         | column_name | sample_data       | data_type | column_description           |
-|------------|--------------|----------|-------------|---------------------------|-------------|-------------------|-----------|------------------------------|
-| patients   | ORCHID       | 1000     | 10          | Contains patient details.  | age        | [45, 60, 50, ...] | integer   | Age of the patient in years. |
-| results    | ORCHID       | 500      | 6           | Stores test result data.   | result     | [positive, ...]   | string    | The result of the test.      |
+# Sample data dictionary output
+
+## Table metadata
+
+| table_name | dataset_name | table_description                     | number_of_rows | number_of_columns |
+|------------|--------------|---------------------------------------|----------------|-------------------|
+| patients   | MIMIC-IV     | Contains core patient demographics    | 50,000         | 12                |
+| lab_results| MIMIC-IV     | Laboratory test measurements          | 250,000        | 8                 |
+
+## Column metadata
+
+| table_name | column_name    | datatype | sample_data                  | column_description                          |
+|------------|----------------|----------|------------------------------|---------------------------------------------|
+| patients   | patient_id     | integer  | [1001, 1002, 1003]           | Unique hospital patient identifier          |
+| patients   | gender         | string   | ["M", "F", "M"]              | Biological sex (M/F)                        |
+| patients   | age            | integer  | [45, 72, 38]                 | Patient age at admission                    |
+| lab_results| test_name      | string   | ["WBC", "HbA1c", "Creatinine"]| Laboratory test performed                   |
+| lab_results| result_value   | float    | [12.5, 6.2, 0.9]             | Numeric result of the laboratory test       |
 
 ## Data quality report
 
-In addition to the data dictionary, the tool also generates a file called `data_quality.csv`. This file provides a summary of the data quality for each column, including the following information:
+| table_name | column_name    | missing_percentage | has_outliers | num_duplicates |
+|------------|----------------|--------------------|--------------|----------------|
+| patients   | patient_id     | 0.0%               | No           | 0              |
+| patients   | gender         | 0.2%               | No           | 0              |
+| lab_results| test_name      | 0.0%               | No           | 0              |
+| lab_results| result_value   | 1.8%               | Yes          | 12             |
 
-| column_name | num_missing_values | num_unique_values | data_type | data_quality_score | data_quality_description |
-|-------------|--------------------|-------------------|-----------|--------------------|--------------------------|
-| age         | 0                  | 10                | integer   | 1.0                | No missing values.       |
-| result      | 5                  | 3                 | string    | 0.95               | Some missing values.     |
+## Table relationships
 
-Where:
-- **num_missing_values**: The number of missing values in the column.
-- **num_unique_values**: The number of unique values in the column.
-- **data_type**: The inferred data type of the column (e.g., integer, float, string).
-- **data_quality_score**: A score (between 0 and 1) representing the quality of the column based on the completeness and diversity of data.
-- **data_quality_description**: A text description of the data quality, such as the presence of missing values or the number of unique values.
+### patients.patient_id ↔ admissions.patient_id
+- **Confidence Score**: 0.98
+- **Relationship Type**: One-to-Many
+- **Semantic Similarity**: 0.95
+- **Mutual Information**: 0.97
 
-This file can be used to assess the overall quality of your dataset, making it easier to identify columns that may require cleaning or further attention.
+### lab_results.test_name ↔ procedures.procedure_name
+- **Confidence Score**: 0.82
+- **Relationship Type**: Many-to-Many
+- **Semantic Similarity**: 0.78
+- **Mutual Information**: 0.85
+
+## Sample markdown output structure
+
+```markdown
+output/
+├── patients_metadata.md
+├── lab_results_metadata.md
+├── data_quality_report.md
+└── relationships.md
 
 ## Troubleshooting
 
