@@ -199,65 +199,105 @@ def generate_data_quality_report(
 
 
 def generate_relationships_between_tables(
-    tables_metadata: List[Dict], data_path: str, model_name: str = "all-MiniLM-L6-v2"
+    tables_metadata: List[Dict], data_path: str
 ) -> pd.DataFrame:
     """
-    Generates relationships between tables using semantic similarity, mutual information,
-    and estimated cardinality.
+    Generate relationships between tables with semantic and statistical analysis.
     """
-    df_meta = pd.DataFrame(tables_metadata)
-    grouped = df_meta.groupby("table_name")
-    table_columns = {table: group["column_name"].tolist() for table, group in grouped}
+    DEFAULT_CONFIDENCE = 0.0
 
-    relationships = []
+    relationship_columns = [
+        "table_a",
+        "column_a",
+        "table_b",
+        "column_b",
+        "semantic_similarity",
+        "mutual_info",
+        "cardinality",
+        "confidence",
+    ]
+    relationships_df = pd.DataFrame(columns=relationship_columns)
 
-    for table_a, columns_a in table_columns.items():
-        for table_b, columns_b in table_columns.items():
-            if table_a >= table_b:
-                continue
-            for col_a in columns_a:
-                for col_b in columns_b:
-                    name_score = semantic_similarity(col_a, col_b)
-                    if name_score > 0.75:
-                        try:
-                            df_a = pd.read_csv(
-                                os.path.join(data_path, f"{table_a}.csv")
-                            )
-                            df_b = pd.read_csv(
-                                os.path.join(data_path, f"{table_b}.csv")
-                            )
+    if not tables_metadata or len(tables_metadata) < 2:
+        return relationships_df
 
-                            if col_a not in df_a.columns or col_b not in df_b.columns:
+    try:
+        df_meta = pd.DataFrame(tables_metadata).fillna("")
+        if df_meta.empty:
+            return relationships_df
+
+        tables = {}
+        for table_name, group in df_meta.groupby("table_name"):
+            tables[table_name] = {
+                "columns": group["column_name"].tolist(),
+                "file_path": os.path.join(data_path, f"{table_name}.csv"),
+            }
+
+        relationships = []
+        table_names = list(tables.keys())
+
+        for i, table_a in enumerate(table_names[:-1]):
+            for table_b in table_names[i + 1 :]:
+                try:
+                    df_a = pd.read_csv(tables[table_a]["file_path"])
+                    df_b = pd.read_csv(tables[table_b]["file_path"])
+
+                    for col_a in tables[table_a]["columns"]:
+                        for col_b in tables[table_b]["columns"]:
+                            try:
+                                name_score = semantic_similarity(col_a, col_b)
+
+                                if name_score > 0.7:
+                                    vals_a = df_a[col_a].dropna().astype(str).tolist()
+                                    vals_b = df_b[col_b].dropna().astype(str).tolist()
+
+                                    mi_score = compute_mutual_information(
+                                        vals_a, vals_b
+                                    )
+                                    cardinality = estimate_cardinality(vals_a, vals_b)
+
+                                    relationships.append(
+                                        {
+                                            "table_a": table_a,
+                                            "column_a": col_a,
+                                            "table_b": table_b,
+                                            "column_b": col_b,
+                                            "semantic_similarity": round(name_score, 3),
+                                            "mutual_info": round(mi_score, 3),
+                                            "cardinality": cardinality,
+                                            "confidence": round(
+                                                0.4 * name_score + 0.6 * mi_score, 3
+                                            ),
+                                        }
+                                    )
+                            except Exception as col_error:
+                                logger.warning(
+                                    f"Skipping {table_a}.{col_a} ↔ {table_b}.{col_b}: {str(col_error)}"
+                                )
                                 continue
 
-                            values_a = df_a[col_a].dropna().astype(str).tolist()
-                            values_b = df_b[col_b].dropna().astype(str).tolist()
+                except Exception as table_error:
+                    logger.warning(
+                        f"Skipping {table_a} ↔ {table_b} comparison: {str(table_error)}"
+                    )
+                    continue
 
-                            mutual_info = compute_mutual_information(values_a, values_b)
-                            cardinality = estimate_cardinality(values_a, values_b)
+        if relationships:
+            relationships_df = pd.DataFrame(relationships)
+            for col in relationship_columns:
+                if col not in relationships_df.columns:
+                    relationships_df[col] = (
+                        DEFAULT_CONFIDENCE if col == "confidence" else ""
+                    )
 
-                            confidence = 0.4 * name_score + 0.6 * min(mutual_info, 1.0)
+            relationships_df = relationships_df.sort_values(
+                "confidence", ascending=False
+            )
 
-                            relationships.append(
-                                {
-                                    "table_a": table_a,
-                                    "column_a": col_a,
-                                    "table_b": table_b,
-                                    "column_b": col_b,
-                                    "semantic_similarity": round(name_score, 3),
-                                    "mutual_info": round(mutual_info, 3),
-                                    "cardinality": cardinality,
-                                    "confidence": round(confidence, 3),
-                                }
-                            )
+    except Exception as e:
+        logger.error(f"Relationship generation failed: {str(e)}")
 
-                        except Exception as e:
-                            logger.warning(
-                                f"Error processing {table_a}.{col_a} and {table_b}.{col_b}: {e}"
-                            )
-                            continue
-
-    return pd.DataFrame(relationships)
+    return relationships_df
 
 
 def semantic_similarity(col1: str, col2: str) -> float:
