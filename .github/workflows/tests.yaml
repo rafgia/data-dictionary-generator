@@ -16,7 +16,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -30,6 +30,11 @@ jobs:
     - name: Clear pip cache
       run: |
         rm -rf ~/.cache/pip
+
+    - name: Preload SentenceTransformer model
+      run: |
+        python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
 
     - name: Cache pip dependencies
       uses: actions/cache@v3
