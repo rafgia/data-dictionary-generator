@@ -7,7 +7,7 @@ from typing import Optional, List, Dict
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import mutual_info_score
+from sklearn.metrics.cluster import normalized_mutual_info_score
 
 
 logging.basicConfig(level=logging.INFO)
@@ -323,10 +323,11 @@ def estimate_cardinality(col_a_vals: List[str], col_b_vals: List[str]) -> str:
 
 def compute_mutual_information(col_a_vals: List[str], col_b_vals: List[str]) -> float:
     try:
-        le = LabelEncoder()
-        a_encoded = le.fit_transform(col_a_vals)
-        b_encoded = le.fit_transform(col_b_vals)
-        return mutual_info_score(a_encoded, b_encoded)
+        le_a = LabelEncoder()
+        le_b = LabelEncoder()
+        a_encoded = le_a.fit_transform(col_a_vals)
+        b_encoded = le_b.fit_transform(col_b_vals)
+        return normalized_mutual_info_score(a_encoded, b_encoded)
     except ValueError as e:
         logger.warning(f"ValueError in mutual info calculation: {e}")
         return 0.0
