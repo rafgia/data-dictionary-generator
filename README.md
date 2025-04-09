@@ -57,7 +57,7 @@ Once the package is installed, you can use the command line to generate metadata
 To run the tool, use the following command:
 
 ```bash
-python cli.py <folder_path> <dataset_name> <output_dir> --model <ollama_model> --format <format>
+python cli.py <folder_path> --dataset_name <dataset_name> --output_dir <output_dir> --model <ollama_model> --format <format>
 ```
 
 #### Parameters:
@@ -140,7 +140,6 @@ For each **column** in your dataset:
 
 ## Sample markdown output structure
 
-```markdown
 output/
 ├── patients_metadata.md
 ├── lab_results_metadata.md
