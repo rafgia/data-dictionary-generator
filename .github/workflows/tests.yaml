@@ -34,7 +34,7 @@ jobs:
     - name: Preload SentenceTransformer model
       run: |
         pip install sentence-transformers
-        python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+        python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', from_tf=True)"
 
 
     - name: Cache pip dependencies
