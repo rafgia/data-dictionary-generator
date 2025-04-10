@@ -3,7 +3,8 @@ import pandas as pd
 import subprocess
 import logging
 import re
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
+from collections import defaultdict
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
 from sklearn.preprocessing import LabelEncoder
@@ -254,7 +255,9 @@ def generate_relationships_between_tables(
                                     mi_score = compute_mutual_information(
                                         vals_a, vals_b
                                     )
-                                    cardinality = estimate_cardinality(vals_a, vals_b)
+                                    cardinality, confidence = estimate_cardinality(
+                                        vals_a, vals_b
+                                    )
 
                                     relationships.append(
                                         {
@@ -265,9 +268,7 @@ def generate_relationships_between_tables(
                                             "semantic_similarity": round(name_score, 3),
                                             "mutual_info": round(mi_score, 3),
                                             "cardinality": cardinality,
-                                            "confidence": round(
-                                                0.4 * name_score + 0.6 * mi_score, 3
-                                            ),
+                                            "confidence": confidence,
                                         }
                                     )
                             except Exception as col_error:
@@ -307,18 +308,43 @@ def semantic_similarity(col1: str, col2: str) -> float:
     return score
 
 
-def estimate_cardinality(col_a_vals: List[str], col_b_vals: List[str]) -> str:
-    unique_a = len(set(col_a_vals))
-    unique_b = len(set(col_b_vals))
-    if unique_a == 0 or unique_b == 0:
-        return "Unknown"
-    ratio = unique_a / unique_b
-    if 0.9 < ratio < 1.1:
-        return "One-to-One"
-    elif ratio < 0.9:
-        return "Many-to-One"
+def estimate_cardinality(
+    col_a_vals: List[str], col_b_vals: List[str]
+) -> Tuple[str, float]:
+    if not col_a_vals or not col_b_vals:
+        return "Unknown", 0.0
+
+    if len(col_a_vals) != len(col_b_vals):
+        min_len = min(len(col_a_vals), len(col_b_vals))
+        col_a_vals = col_a_vals[:min_len]
+        col_b_vals = col_b_vals[:min_len]
+
+    mapping_a_to_b = defaultdict(set)
+    mapping_b_to_a = defaultdict(set)
+
+    for a_val, b_val in zip(col_a_vals, col_b_vals):
+        mapping_a_to_b[a_val].add(b_val)
+        mapping_b_to_a[b_val].add(a_val)
+
+    a_to_b_multi = sum(1 for v in mapping_a_to_b.values() if len(v) > 1)
+    b_to_a_multi = sum(1 for v in mapping_b_to_a.values() if len(v) > 1)
+
+    total_a = len(mapping_a_to_b)
+    total_b = len(mapping_b_to_a)
+
+    a_to_b_ratio = a_to_b_multi / total_a if total_a else 0
+    b_to_a_ratio = b_to_a_multi / total_b if total_b else 0
+
+    confidence = round(1 - max(a_to_b_ratio, b_to_a_ratio), 2)
+
+    if a_to_b_ratio < 0.1 and b_to_a_ratio < 0.1:
+        return "One-to-One", confidence
+    elif a_to_b_ratio >= 0.1 and b_to_a_ratio < 0.1:
+        return "One-to-Many", confidence
+    elif b_to_a_ratio >= 0.1 and a_to_b_ratio < 0.1:
+        return "Many-to-One", confidence
     else:
-        return "One-to-Many"
+        return "Many-to-Many", confidence
 
 
 def compute_mutual_information(col_a_vals: List[str], col_b_vals: List[str]) -> float:

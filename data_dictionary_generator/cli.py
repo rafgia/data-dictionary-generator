@@ -89,7 +89,7 @@ def main(
             relationships_df, os.path.join(output_dir, "relationships.md")
         )
 
-    click.echo(f"Success! Files saved in [green]{output_dir}[/green]", color=True)
+    click.echo(f"Success! Files saved in {output_dir}", color=True)
 
 
 if __name__ == "__main__":

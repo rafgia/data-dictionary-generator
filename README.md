@@ -57,7 +57,7 @@ Once the package is installed, you can use the command line to generate metadata
 To run the tool, use the following command:
 
 ```bash
-python cli.py <folder_path> --dataset_name <dataset_name> --output_dir <output_dir> --model <ollama_model> --format <format>
+python cli.py <folder_path> --dataset-name <dataset_name> --output-dir <output_dir> --model <ollama_model> --format <format>
 ```
 
 #### Parameters:
@@ -75,7 +75,7 @@ python cli.py <folder_path> --dataset_name <dataset_name> --output_dir <output_d
 2. **Run the generator**:
 
    ```bash
-   python cli.py data/MIMIC --dataset_name MIMIC --output_dir output --model deepseek-r1:1.5b --format csv
+   python cli.py data/MIMIC --dataset-name MIMIC --output-dir output --model deepseek-r1:1.5b --format csv
    ```
 
 This will generate metadata for each column in the dataset and save it to a CSV file (`metadata_output.csv`).
