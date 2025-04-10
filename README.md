@@ -62,8 +62,8 @@ python cli.py <folder_path> --dataset-name <dataset_name> --output-dir <output_d
 
 #### Parameters:
 - `<folder_path>`: The path to the folder containing your CSV files.
-- `<dataset_name>`: The name of your dataset (e.g., `MIMIC`).
-- `<output_dir>`: The name of the path where the metadata will be saved.
+- `<dataset-name>`: The name of your dataset (e.g., `MIMIC`).
+- `<output-dir>`: The name of the path where the metadata will be saved.
 - `--model`: (Optional) Specify the Ollama model to use for generating metadata (default is `deepseek-r1:1.5b`).
 - `--format`: where <format> can be one of csv, json, pdf, markdown (default is csv).
 

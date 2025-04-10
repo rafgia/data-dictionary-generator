@@ -1,6 +1,11 @@
 import os
 import pandas as pd
 import click
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 from data_dictionary_generator.generator import (
     process_csv,
     generate_relationships_between_tables,
@@ -8,8 +13,192 @@ from data_dictionary_generator.generator import (
 )
 
 
+def save_metadata_to_pdf(metadata_df: pd.DataFrame, output_file: str) -> None:
+    """Save metadata as a formatted PDF document with text layout"""
+    doc = SimpleDocTemplate(output_file, pagesize=letter)
+    styles = getSampleStyleSheet()
+
+    styles.add(
+        ParagraphStyle(
+            name="TableHeader",
+            parent=styles["Heading1"],
+            fontSize=14,
+            leading=16,
+            spaceAfter=12,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="TableDescription",
+            parent=styles["Normal"],
+            fontSize=10,
+            leading=12,
+            spaceAfter=18,
+            leftIndent=18,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="ColumnHeader",
+            parent=styles["Heading2"],
+            fontSize=12,
+            leading=14,
+            spaceAfter=6,
+            leftIndent=36,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="ColumnDetail",
+            parent=styles["Normal"],
+            fontSize=10,
+            leading=12,
+            spaceAfter=6,
+            leftIndent=54,
+        )
+    )
+
+    elements = []
+
+    elements.append(Paragraph("Data dictionary", styles["Title"]))
+    elements.append(Spacer(1, 0.25 * inch))
+
+    grouped = metadata_df.groupby("table_name")
+
+    for table_name, group in grouped:
+        table_desc = group.iloc[0]["table_description"]
+        dataset_name = group.iloc[0]["dataset_name"]
+
+        elements.append(Paragraph(f"Table: {table_name}", styles["TableHeader"]))
+        elements.append(
+            Paragraph(f"Dataset: {dataset_name}", styles["TableDescription"])
+        )
+        elements.append(
+            Paragraph(f"Description: {table_desc}", styles["TableDescription"])
+        )
+        elements.append(Spacer(1, 0.1 * inch))
+
+        for _, row in group.iterrows():
+            sample_data = ", ".join(str(x) for x in row["sample_data"][:3])
+
+            elements.append(
+                Paragraph(f"Column: {row['column_name']}", styles["ColumnHeader"])
+            )
+            elements.append(
+                Paragraph(
+                    f"Description: {row['column_description']}", styles["ColumnDetail"]
+                )
+            )
+            elements.append(
+                Paragraph(f"Data Type: {row['datatype']}", styles["ColumnDetail"])
+            )
+            elements.append(
+                Paragraph(f"Sample Values: {sample_data}", styles["ColumnDetail"])
+            )
+            elements.append(Spacer(1, 0.1 * inch))
+
+        elements.append(Spacer(1, 0.3 * inch))
+
+    doc.build(elements)
+
+
+def save_quality_to_pdf(quality_df: pd.DataFrame, output_file: str) -> None:
+    doc = SimpleDocTemplate(output_file, pagesize=letter)
+    styles = getSampleStyleSheet()
+
+    styles.add(
+        ParagraphStyle(
+            name="TableHeader",
+            parent=styles["Heading1"],
+            fontSize=14,
+            leading=16,
+            spaceAfter=12,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="QualityHeader",
+            parent=styles["Heading2"],
+            fontSize=12,
+            leading=14,
+            spaceAfter=6,
+            leftIndent=36,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="QualityDetail",
+            parent=styles["Normal"],
+            fontSize=10,
+            leading=12,
+            spaceAfter=6,
+            leftIndent=54,
+        )
+    )
+
+    elements = []
+
+    elements.append(Paragraph("Data quality report", styles["Title"]))
+    elements.append(Spacer(1, 0.25 * inch))
+
+    grouped = quality_df.groupby("table_name")
+
+    for table_name, group in grouped:
+        elements.append(Paragraph(f"Table: {table_name}", styles["TableHeader"]))
+        elements.append(Spacer(1, 0.1 * inch))
+
+        general_info = group[group["column_name"] == "ALL_COLUMNS"]
+        if not general_info.empty:
+            info = general_info.iloc[0]
+            elements.append(
+                Paragraph("General Table Quality:", styles["QualityHeader"])
+            )
+            if info.get("has_duplicate_rows") == "True":
+                elements.append(
+                    Paragraph(
+                        f"Duplicate Rows: {info.get('num_duplicate_rows', 'N/A')}",
+                        styles["QualityDetail"],
+                    )
+                )
+            if info.get("has_duplicate_columns") == "True":
+                elements.append(
+                    Paragraph(
+                        f"Duplicate Columns: {info.get('num_duplicate_columns', 'N/A')}",
+                        styles["QualityDetail"],
+                    )
+                )
+            elements.append(Spacer(1, 0.1 * inch))
+
+        columns_info = group[group["column_name"] != "ALL_COLUMNS"]
+        for _, row in columns_info.iterrows():
+            elements.append(
+                Paragraph(f"Column: {row['column_name']}", styles["QualityHeader"])
+            )
+            elements.append(
+                Paragraph(
+                    f"Missing Values: {row['missing_percentage']}%",
+                    styles["QualityDetail"],
+                )
+            )
+            if row.get("has_outliers") == "True":
+                elements.append(
+                    Paragraph(
+                        f"Outliers: {row.get('num_outliers', 'N/A')}",
+                        styles["QualityDetail"],
+                    )
+                )
+            elements.append(Spacer(1, 0.1 * inch))
+
+        elements.append(Spacer(1, 0.3 * inch))
+
+    doc.build(elements)
+
+
 def save_metadata_in_format(
-    metadata_df: pd.DataFrame, format: str, output_file: str
+    metadata_df: pd.DataFrame,
+    format: str,
+    output_file: str,
+    is_relationships: bool = False,
 ) -> None:
     """Save metadata in specified format"""
     if format == "csv":
@@ -17,18 +206,116 @@ def save_metadata_in_format(
     elif format == "json":
         metadata_df.to_json(output_file, orient="records", lines=True)
     elif format == "pdf":
-        click.echo("PDF format is not implemented yet.")
+        if is_relationships:
+            save_relationships_to_pdf(metadata_df, output_file)
+        else:
+            save_metadata_to_pdf(metadata_df, output_file)
     elif format == "markdown":
         with open(output_file, "w") as f:
-            f.write("# Metadata\n")
-            for _, row in metadata_df.iterrows():
-                f.write(f"## {row['table_name']} - {row['column_name']}\n")
-                f.write(f"- **Description**: {row['column_description']}\n")
-                f.write(f"- **Data Type**: {row['datatype']}\n")
-                f.write(f"- **Sample Data**: {row['sample_data']}\n")
-                f.write("\n")
+            if is_relationships:
+                f.write("# Table relationships\n")
+                for _, row in metadata_df.iterrows():
+                    f.write(
+                        f"## {row['table_a']}.{row['column_a']} ↔ {row['table_b']}.{row['column_b']}\n"
+                    )
+                    f.write(
+                        f"- **Semantic similarity**: {row['semantic_similarity']:.2f}\n"
+                    )
+                    f.write(f"- **Cardinality**: {row['cardinality']}\n")
+                    f.write(f"- **Confidence**: {row['confidence']:.2f}\n\n")
+            else:
+                f.write("# Metadata\n")
+                for _, row in metadata_df.iterrows():
+                    f.write(f"## {row['table_name']} - {row['column_name']}\n")
+                    f.write(f"- **Description**: {row['column_description']}\n")
+                    f.write(f"- **Data type**: {row['datatype']}\n")
+                    f.write(f"- **Sample data**: {row['sample_data']}\n")
+                    f.write("\n")
     else:
         click.echo(f"Unsupported format: {format}")
+
+
+def save_relationships_to_pdf(relationships_df: pd.DataFrame, output_file: str) -> None:
+    """Save relationships as a formatted PDF document"""
+    doc = SimpleDocTemplate(output_file, pagesize=letter)
+    styles = getSampleStyleSheet()
+
+    styles.add(
+        ParagraphStyle(
+            name="Relationship",
+            parent=styles["Normal"],
+            fontSize=10,
+            leading=12,
+            spaceAfter=6,
+        )
+    )
+
+    elements = []
+
+    elements.append(Paragraph("Table relationships", styles["Title"]))
+    elements.append(Spacer(1, 0.25 * inch))
+
+    if relationships_df.empty:
+        elements.append(
+            Paragraph("No relationships detected between tables.", styles["Normal"])
+        )
+    else:
+        table_data = []
+        headers = [
+            "Table A",
+            "Column A",
+            "Table B",
+            "Column B",
+            "Similarity",
+            "Cardinality",
+            "Confidence",
+        ]
+        table_data.append(headers)
+
+        for _, row in relationships_df.iterrows():
+            table_data.append(
+                [
+                    row["table_a"],
+                    row["column_a"],
+                    row["table_b"],
+                    row["column_b"],
+                    f"{row['semantic_similarity']:.2f}",
+                    row["cardinality"],
+                    f"{row['confidence']:.2f}",
+                ]
+            )
+
+        col_widths = [
+            1.2 * inch,
+            1.5 * inch,
+            1.2 * inch,
+            1.5 * inch,
+            0.8 * inch,
+            1 * inch,
+            0.8 * inch,
+        ]
+        table = Table(table_data, colWidths=col_widths)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                    ("FONTSIZE", (0, 1), (-1, -1), 8),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+
+        elements.append(table)
+        elements.append(Spacer(1, 0.3 * inch))
+
+    doc.build(elements)
 
 
 @click.command()
@@ -70,11 +357,17 @@ def main(
                 )
                 save_metadata_in_format(pd.DataFrame(metadata), format, metadata_file)
 
-                quality_df = pd.DataFrame(
-                    [r for r in quality_report if r["column_name"] != "ALL_COLUMNS"]
-                )
-                quality_file = os.path.join(output_dir, f"{base_filename}_quality.csv")
-                quality_df.to_csv(quality_file, index=False)
+                quality_df = pd.DataFrame(quality_report)
+                if format == "pdf":
+                    quality_file = os.path.join(
+                        output_dir, f"{base_filename}_quality.pdf"
+                    )
+                    save_quality_to_pdf(quality_df, quality_file)
+                else:
+                    quality_file = os.path.join(
+                        output_dir, f"{base_filename}_quality.csv"
+                    )
+                    quality_df.to_csv(quality_file, index=False)
 
                 all_quality_reports.extend(quality_report)
 
@@ -83,7 +376,9 @@ def main(
         relationships_file = os.path.join(output_dir, f"relationships.{format}")
         relationships_csv = os.path.join(output_dir, "relationships.csv")
 
-        save_metadata_in_format(relationships_df, format, relationships_file)
+        save_metadata_in_format(
+            relationships_df, format, relationships_file, is_relationships=True
+        )
         relationships_df.to_csv(relationships_csv, index=False)
         save_relationships_to_markdown(
             relationships_df, os.path.join(output_dir, "relationships.md")
