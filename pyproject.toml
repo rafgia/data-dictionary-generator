@@ -1,3 +1,30 @@
 [build-system]
 requires = ["setuptools", "wheel", "pytest"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "data-dictionary-generator"
+version = "0.0.1"
+description = "Generate clinical data dictionaries using language models"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "click>=8.0.0",
+    "pandas>=2.0.0",
+    "numpy>=1.20.0",
+    "requests>=2.25.0",
+    "ollama>=0.1.0",
+    "torch>=2.0.0",
+    "transformers>=4.20.0",
+    "sentence-transformers>=2.0.0",
+    "scikit-learn>=1.0.0",
+    "reportlab>=3.6.0",
+    "tqdm>=4.60.0",
+]
+
+[project.scripts]
+generate-dictionary = "data_dictionary_generator.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["data_dictionary_generator*"]

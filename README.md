@@ -20,18 +20,7 @@ A Python package to automatically generate data dictionaries for clinical datase
 
 ## Requirements
 
-Make sure you have Python 3.8+ installed, along with the following dependencies:
-
-- **pandas**: For handling and processing the dataset.
-- **requests**: For HTTP requests (if needed).
-- **ollama**: For generating metadata descriptions using Ollama's LLM.
-- **torch**: PyTorch for deep learning operations (used with Ollama).
-- **transformers**: Hugging Face Transformers library, if you're using other LLMs.
-
-Install dependencies using the following command:
-```bash
-pip install -r requirements.txt
-```
+Make sure you have Python 3.8+ installed. All dependencies are automatically installed when you install the package.
 
 ## Installation
 
@@ -42,10 +31,10 @@ git clone https://github.com/rafgia/data-dictionary-generator.git
 cd data-dictionary-generator
 ```
 
-Install the required Python packages:
+Install the package:
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Usage
@@ -57,7 +46,7 @@ Once the package is installed, you can use the command line to generate metadata
 To run the tool, use the following command:
 
 ```bash
-python cli.py <folder_path> --dataset-name <dataset_name> --output-dir <output_dir> --model <ollama_model> --format <format>
+generate-dictionary <folder_path> --dataset-name <dataset_name> --output-dir <output_dir> --model <ollama_model> --format <format>
 ```
 
 #### Parameters:
@@ -75,7 +64,7 @@ python cli.py <folder_path> --dataset-name <dataset_name> --output-dir <output_d
 2. **Run the generator**:
 
    ```bash
-   python cli.py data/MIMIC --dataset-name MIMIC --output-dir output --model deepseek-r1:1.5b --format csv
+   generate-dictionary data/MIMIC --dataset-name MIMIC --output-dir output --model deepseek-r1:1.5b --format csv
    ```
 
 This will generate metadata for each column in the dataset and save it to a CSV file (`metadata_output.csv`).
