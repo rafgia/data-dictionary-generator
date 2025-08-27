@@ -6,3 +6,9 @@ __pycache__/
 *.csv
 *.log
 .env
+
+# Virtual environments
+*venv*/
+
+# Python packaging
+*.egg-info/
