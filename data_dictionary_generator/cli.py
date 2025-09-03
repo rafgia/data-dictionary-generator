@@ -12,6 +12,9 @@ from data_dictionary_generator.generator import (
     generate_relationships_between_tables,
     save_relationships_to_markdown,
 )
+from importlib.metadata import version
+
+VERSION = version("data-dictionary-generator")
 
 
 def save_metadata_to_pdf(metadata_df: pd.DataFrame, output_file: str) -> None:
@@ -352,6 +355,7 @@ def validate_ollama_model_available(model: str) -> None:
     type=click.Choice(["csv", "json", "pdf", "markdown"]),
     help="Output format for metadata",
 )
+@click.version_option(version=VERSION, prog_name="data-dictionary-generator")
 def main(
     data_dir: str, dataset_name: str, model: str, output_dir: str, format: str
 ) -> None:
