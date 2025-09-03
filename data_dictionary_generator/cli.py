@@ -1,4 +1,5 @@
 import os
+import subprocess
 import pandas as pd
 import click
 from reportlab.lib.pagesizes import letter
@@ -318,6 +319,23 @@ def save_relationships_to_pdf(relationships_df: pd.DataFrame, output_file: str) 
     doc.build(elements)
 
 
+def validate_ollama_model_available(model: str) -> None:
+    """Fail fast if the requested Ollama model is not available locally."""
+    try:
+        result = subprocess.run(
+            ["ollama", "show", model], capture_output=True, text=True
+        )
+    except FileNotFoundError as e:
+        raise click.ClickException(
+            "Ollama CLI not found. Please install Ollama and ensure 'ollama' is on your PATH."
+        ) from e
+
+    if result.returncode != 0:
+        raise click.ClickException(
+            f"Ollama model '{model}' not found. Install it with: 'ollama pull {model}'"
+        )
+
+
 @click.command()
 @click.argument("data-dir", type=click.Path(exists=True, file_okay=False))
 @click.option("--dataset-name", required=True, help="Name of the dataset")
@@ -339,6 +357,12 @@ def main(
 ) -> None:
     """Generate clinical data dictionaries from CSV files."""
     os.makedirs(output_dir, exist_ok=True)
+    # Validate model only if user explicitly provided --model (not when default is used)
+    ctx = click.get_current_context(silent=True)
+    if ctx is not None:
+        src = ctx.get_parameter_source("model")
+        if src == click.core.ParameterSource.COMMANDLINE:
+            validate_ollama_model_available(model)
     all_metadata: list[dict] = []
     all_quality_reports: list[dict] = []
 
