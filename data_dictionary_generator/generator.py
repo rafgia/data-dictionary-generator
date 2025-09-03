@@ -6,14 +6,30 @@ import re
 from typing import Optional, List, Dict, Tuple
 from collections import defaultdict
 import numpy as np
-from sentence_transformers import SentenceTransformer, util
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import normalized_mutual_info_score
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Lazily initialize the embeddings model to avoid loading during CLI --help or other non-usage paths
+_embeddings_model = None  # cache after first load
+
+
+def _get_embeddings_model():
+    """Return a cached SentenceTransformer instance, loading it on first use only."""
+    global _embeddings_model
+    if _embeddings_model is None:
+        from sentence_transformers import SentenceTransformer  # local import
+        # Print a concise message so first-time users see what's happening
+        import click  # local import to avoid global import cost
+
+        click.echo("Downloading sentence transformer: all-MiniLM-L6-v2")
+
+        _embeddings_model = SentenceTransformer("all-MiniLM-L6-v2")
+        click.echo("Embeddings model ready.")
+    return _embeddings_model
 
 
 def run_ollama_model(prompt: str, model: str = "llama3.1") -> Optional[str]:
@@ -302,6 +318,9 @@ def generate_relationships_between_tables(
 
 
 def semantic_similarity(col1: str, col2: str) -> float:
+    from sentence_transformers import util  # local import
+
+    model = _get_embeddings_model()
     embedding1 = model.encode(col1, convert_to_tensor=True)
     embedding2 = model.encode(col2, convert_to_tensor=True)
     score = util.pytorch_cos_sim(embedding1, embedding2).item()
