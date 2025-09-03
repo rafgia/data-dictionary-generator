@@ -53,7 +53,7 @@ generate-dictionary <folder_path> --dataset-name <dataset_name> --output-dir <ou
 - `<folder_path>`: The path to the folder containing your CSV files.
 - `<dataset-name>`: The name of your dataset (e.g., `MIMIC`).
 - `<output-dir>`: The name of the path where the metadata will be saved.
-- `--model`: (Optional) Specify the Ollama model to use for generating metadata (default is `deepseek-r1:1.5b`).
+- `--model`: (Optional) Specify the Ollama model to use for generating metadata (default is `llama3.1`).
 - `--format`: where <format> can be one of csv, json, pdf, markdown (default is csv).
 
 ### Example
@@ -63,9 +63,9 @@ generate-dictionary <folder_path> --dataset-name <dataset_name> --output-dir <ou
 
 2. **Run the generator**:
 
-   ```bash
-   generate-dictionary data/MIMIC --dataset-name MIMIC --output-dir output --model deepseek-r1:1.5b --format csv
-   ```
+```bash
+generate-dictionary data/MIMIC --dataset-name MIMIC --output-dir output --model llama3.1 --format csv
+```
 
 This will generate metadata for each column in the dataset and save it to a CSV file (`metadata_output.csv`).
 
@@ -138,9 +138,9 @@ output/
 ## Troubleshooting
 
 ### 1. If you encounter an error such as `model not found`, make sure you have set up Ollama correctly and the model is available.
-   - Ensure that you can manually run the model using `ollama run deepseek-r1:1.5b` from the command line before using it in the Python script.
+- Ensure that you can manually run the model using `ollama run llama3.1` from the command line before using it in the Python script.
 
-### 2. If the dependencies are not installing, make sure you're using the correct Python version and have all required libraries listed in `requirements.txt`.
+### 2. If the dependencies are not installing, make sure you're using the correct Python version and have all required libraries listed in `pyproject.toml`.
 
 ### 3. If the dataset is very large, consider breaking it down into smaller CSV files for more efficient processing.
 
