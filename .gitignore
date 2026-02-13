@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.csv
+*.log
+.env
+
+# Virtual environments
+*venv*/
+
+# Python packaging
+*.egg-info/

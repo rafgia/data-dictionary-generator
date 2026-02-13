@@ -1,0 +1,12 @@
+pandas
+numpy
+scikit-learn
+openai
+requests
+torch
+sentence-transformers
+click
+reportlab
+
+pip install numpy==1.25.2 pandas==2.1.0 scikit-learn==1.3.0 torch==2.1.0 sentence-transformers==5.1.2 transformers==4.49.0 openai==0.27.8 requests==2.32.5 click==8.1.7 reportlab==4.1.0 openai
+pip install google-generativeai
