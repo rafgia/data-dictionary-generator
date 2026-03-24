@@ -143,10 +143,6 @@ def generate_single_column_description(column_meta: ColumnMeta, table_name: str,
     samples_str = ", ".join([str(s) for s in column_meta.sample_values]) if column_meta.sample_values else "N/A"
 
     type_str = column_meta.semantic_type if column_meta.semantic_type else column_meta.data_type
-    if column_meta.is_primary_key:
-        type_str += " (Primary Key)"
-    if column_meta.foreign_key_to:
-        type_str += f" (Foreign Key to {column_meta.foreign_key_to})"
 
     prompt = COLUMN_PROMPT_TEMPLATE.replace("{{dataset_name}}", dataset_name)\
                                    .replace("{{dataset_domain}}", dataset_domain)\

@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 import warnings
 from pattern_extraction import extract_patterns, detect_semantic_type
 from data_type import infer_column_data_type
-from relationships import detect_primary_and_foreign_keys
 from column_stats import compute_column_stats
 from load_dataset import read_dataset
 
@@ -21,8 +20,6 @@ class ColumnMeta(BaseModel):
     null_count: int
     unique_count: int
     stats: Optional[Dict[str, Any]] = None
-    foreign_key_to: Optional[str] = None
-    is_primary_key: bool = False
     description: Optional[str] = None
 
 class TableMeta(BaseModel):
@@ -134,7 +131,7 @@ def extract_table_metadata(table_file: pathlib.Path, num_sample_rows: int = 3) -
 
 def extract_dataset_metadata(path: pathlib.Path, domain_covered: Optional[str] = None, output_dir: Optional[pathlib.Path] = None) -> DatasetMeta:
     """
-    Extract metadata for all tables in a dataset, then detect relationships.
+    Extract metadata for all tables in a dataset.
     If the domain is not provided, the user will be prompted for input.
     """
     tables_meta: Dict[str, TableMeta] = {}
@@ -197,7 +194,6 @@ def extract_dataset_metadata(path: pathlib.Path, domain_covered: Optional[str] =
     for table_name, df in dataframes.items():
         dataset_meta.tables[table_name].dataframe = df
 
-    relationships = detect_primary_and_foreign_keys(dataset_meta, output_dir)
     for table_meta in dataset_meta.tables.values():
         if hasattr(table_meta, 'dataframe'):
             del table_meta.dataframe

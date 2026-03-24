@@ -80,12 +80,7 @@ def save_markdown_summary(dataset_meta: DatasetMeta, output_file: pathlib.Path):
             f.write("- **Columns:**\n")
             for col_name, col_meta in table_meta.columns.items():
                 col_type = col_meta.semantic_type or col_meta.data_type
-                flags = ""
-                if col_meta.is_primary_key:
-                    flags += " (PK)"
-                if col_meta.foreign_key_to:
-                    flags += f" (FK → {col_meta.foreign_key_to})"
-                f.write(f"  - `{col_name}` ({col_type}{flags}): {col_meta.description}\n")
+                f.write(f"  - `{col_name}` ({col_type}): {col_meta.description}\n")
 
 
 def cli():
