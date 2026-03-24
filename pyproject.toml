@@ -1,13 +1,15 @@
 [build-system]
-requires = ["setuptools", "wheel", "pytest"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "data-dictionary-generator"
+name = "data-atlas"
 version = "0.0.1"
 description = "Generate clinical data dictionaries using language models"
 readme = "README.md"
 requires-python = ">=3.8"
+authors = [{name = "Raffaele Giancotti", email = "raffaele.giancotti@unical.it"}]
+license = {text = "MIT"}
 dependencies = [
     "click>=8.0.0",
     "pandas>=2.0.0",
@@ -20,6 +22,10 @@ dependencies = [
     "scikit-learn>=1.0.0",
     "reportlab>=3.6.0",
     "tqdm>=4.60.0",
+]
+
+[project.optional-dependencies]
+dev = [
     "pytest>=7.0.0",
 ]
 
