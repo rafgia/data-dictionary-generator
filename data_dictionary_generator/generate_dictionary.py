@@ -1,6 +1,8 @@
 import argparse
+import pandas as pd
 import pathlib
 import sys
+import json
 from metadata_extraction import DatasetMeta, extract_dataset_metadata
 from description_generator import (
     generate_dataset_description,
@@ -8,6 +10,8 @@ from description_generator import (
     generate_single_column_description,
     run_llm_dispatcher
 )
+from relationship_inference import infer_all_relationships, deduplicate_relationships
+from schema_visualization import (generate_er_diagram, save_relationships_summary)
 
 def generate_full_metadata_and_descriptions(
     dataset_path: pathlib.Path,
@@ -35,8 +39,7 @@ def generate_full_metadata_and_descriptions(
             dataset_domain=dataset_meta.domain_covered or "Unspecified",
             model=llm_model,
             llm_function=run_llm_dispatcher
-            )
-
+        )
 
         for column_name, column_meta in table_meta.columns.items():
             column_meta.description = generate_single_column_description(
@@ -55,24 +58,21 @@ def generate_full_metadata_and_descriptions(
 
 def save_metadata_to_json(dataset_meta: DatasetMeta, output_file: pathlib.Path):
     with open(output_file, "w", encoding="utf-8") as f:
-        if hasattr(dataset_meta, "model_dump_json"):
-            f.write(dataset_meta.model_dump_json(indent=2, exclude_none=True))
-        else:
-            f.write(dataset_meta.json(indent=2, exclude_none=True))
-
+        f.write(dataset_meta.model_dump_json(indent=2, exclude_none=True))
 
 def save_markdown_summary(dataset_meta: DatasetMeta, output_file: pathlib.Path):
     with open(output_file, "w", encoding="utf-8") as f:
-
         f.write(f"# Dataset: {dataset_meta.dataset_name}\n\n")
         f.write(f"**Domain:** {dataset_meta.domain_covered or 'N/A'}\n")
-        if dataset_meta.time_period_covered:
-            start = dataset_meta.time_period_covered["start"]
-            end = dataset_meta.time_period_covered["end"]
-            f.write(f"**Time coverage:** {start} → {end}\n")
-        f.write(f"\n**Overall description:** {dataset_meta.description}\n\n")
 
+        if dataset_meta.time_period_covered:
+            start = dataset_meta.time_period_covered.get("start", "Unknown")
+            end = dataset_meta.time_period_covered.get("end", "Unknown")
+            f.write(f"**Time coverage:** {start} → {end}\n")
+
+        f.write(f"\n**Overall description:** {dataset_meta.description}\n\n")
         f.write("## Tables\n")
+
         for table_name, table_meta in dataset_meta.tables.items():
             f.write(f"\n### {table_name}\n")
             f.write(f"- **Rows:** {table_meta.row_count}\n")
@@ -80,73 +80,56 @@ def save_markdown_summary(dataset_meta: DatasetMeta, output_file: pathlib.Path):
             f.write("- **Columns:**\n")
             for col_name, col_meta in table_meta.columns.items():
                 col_type = col_meta.semantic_type or col_meta.data_type
-                f.write(f"  - `{col_name}` ({col_type}): {col_meta.description}\n")
-
+                null_percentage = (col_meta.null_count / col_meta.total_rows * 100) if col_meta.total_rows > 0 else 0.0
+                
+                f.write(f"  - `{col_name}` ({col_type}): {col_meta.description} [nulls: {null_percentage:.2f}%]\n")
 
 def cli():
-    parser = argparse.ArgumentParser(
-        description="Generate metadata dictionary with descriptions for a dataset folder."
-    )
-
-    parser.add_argument(
-        "folder_path",
-        type=str,
-        help="Path to the dataset folder containing CSV files"
-    )
-
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        required=True,
-        help="Directory where output JSON and MD files will be saved"
-    )
-
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="llama3.1",
-        help="LLM model to use (default: llama3.1)"
-    )
-
-    parser.add_argument(
-        "--domain",
-        type=str,
-        default=None,
-        help="Optional domain tag to include in metadata"
-    )
-
+    parser = argparse.ArgumentParser(description="Generate metadata dictionary and schema visualization.")
+    parser.add_argument("folder_path", type=str, help="Path to the dataset folder")
+    parser.add_argument("--output-dir", type=str, required=True, help="Output directory")
+    parser.add_argument("--model", type=str, default="llama3.1")
+    parser.add_argument("--domain", type=str, default=None)
+    parser.add_argument("--no-relationships", action="store_false", dest="infer_relationships")
+    parser.add_argument("--min-overlap", type=float, default=80.0) 
+    parser.add_argument("--min-confidence", type=float, default=0.7)
+    
     args = parser.parse_args()
-
-    dataset_path = pathlib.Path(args.folder_path)
-    output_dir = pathlib.Path(args.output_dir)
-    model = args.model
-    domain = args.domain
+    dataset_path, output_dir = pathlib.Path(args.folder_path), pathlib.Path(args.output_dir)
 
     if not dataset_path.exists():
-        print(f"Dataset path does not exist: {dataset_path}")
+        print(f"Error: Path {dataset_path} not found.")
         sys.exit(1)
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    dataset_meta = generate_full_metadata_and_descriptions(dataset_path, output_dir, args.model, args.domain)
+    found_any_rels = False
+    if args.infer_relationships:
+        dataframes = {name: getattr(meta, 'dataframe', None) for name, meta in dataset_meta.tables.items()}
+        dataframes = {k: v for k, v in dataframes.items() if v is not None}
+        if len(dataframes) >= 2:
+            print(f"\nInferring relationships between {len(dataframes)} tables...")
+            raw_rels = infer_all_relationships(dataset_meta, dataframes, args.min_overlap, args.min_confidence)
+            relationships = deduplicate_relationships(raw_rels)
+            if relationships:
+                found_any_rels = True
+                rel_summary_path = output_dir / "relationships_summary.md"
+                save_relationships_summary(relationships, rel_summary_path)
+                with open(output_dir / "relationships.json", 'w', encoding='utf-8') as f:
+                    rels_data = [r.model_dump() for r in relationships]
+                    json.dump(rels_data, f, indent=2)
+                generate_er_diagram(dataset_meta, relationships, output_dir / "schema_diagram.mmd")
+            else:
+                print("No strong relationships detected.")
 
-    json_output = output_dir / "dictionary.json"
-    md_output = output_dir / "dictionary_summary.md"
-
-    print(f"Using model: {model}")
-
-    dataset_meta = generate_full_metadata_and_descriptions(
-        dataset_path=dataset_path,
-        output_dir=output_dir,
-        llm_model=model,
-        domain_covered=domain
-    )
-
-    save_metadata_to_json(dataset_meta, json_output)
-    save_markdown_summary(dataset_meta, md_output)
-
-    print("\nData dictionary successfully generated.")
-    print(f"JSON saved to: {json_output}")
-    print(f"Markdown saved to: {md_output}")
-
+    save_markdown_summary(dataset_meta, output_dir / "dictionary_summary.md")
+    for table_meta in dataset_meta.tables.values():
+        if hasattr(table_meta, "dataframe"):
+            table_meta.dataframe = None
+    
+    save_metadata_to_json(dataset_meta, output_dir / "dictionary.json")
+    if found_any_rels:
+        print(f"Diagram saved to: {output_dir / 'schema_diagram.mmd'}")
 
 if __name__ == "__main__":
     cli()

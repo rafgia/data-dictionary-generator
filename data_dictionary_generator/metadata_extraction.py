@@ -194,8 +194,8 @@ def extract_dataset_metadata(path: pathlib.Path, domain_covered: Optional[str] =
     for table_name, df in dataframes.items():
         dataset_meta.tables[table_name].dataframe = df
 
-    for table_meta in dataset_meta.tables.values():
-        if hasattr(table_meta, 'dataframe'):
-            del table_meta.dataframe
+    #for table_meta in dataset_meta.tables.values():
+        #if hasattr(table_meta, 'dataframe'):
+            #del table_meta.dataframe
 
     return dataset_meta
