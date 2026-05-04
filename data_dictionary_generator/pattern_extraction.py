@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 from dateutil.parser import parse as dateparse
-from data_type import infer_column_data_type
+from data_dictionary_generator.data_type import infer_column_data_type
 
 def normalize_pattern(value: str) -> str:
     """Normalize a string into a pattern mask (A/a/9/special)."""

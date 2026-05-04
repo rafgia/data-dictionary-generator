@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from collections import Counter
-from data_type import infer_data_type
+from data_dictionary_generator.data_type import infer_data_type
 
 def compute_column_stats(series: pd.Series, sample_size: int = 5000) -> dict:
     """

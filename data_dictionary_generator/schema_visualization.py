@@ -1,6 +1,6 @@
 import pathlib
 from typing import List
-from relationship_inference import RelationshipMeta
+from data_dictionary_generator.relationship_inference import RelationshipMeta
 
 def clean_name(name: str) -> str:
     """Ensure table and column names are Mermaid-safe."""

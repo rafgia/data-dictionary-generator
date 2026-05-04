@@ -1,6 +1,8 @@
 # DataAtlas: Automatic Generation of Data Dictionaries
 
-A Python package to automatically generate data dictionaries for clinical datasets using large language models (LLMs). This tool takes in dataset files (CSV, Excel, or JSON format), processes them, and generates descriptions for each column in the dataset, as well as other metadata like data types, sample data, and table descriptions.
+DataAtlas is a Python package to automatically generate structured data dictionaries and schema insights from tabular datasets using large language models (LLMs).
+
+It supports CSV, Excel, and JSON datasets, and produces rich metadata including column descriptions, table summaries, and inferred relationships.
 
 ---
 
@@ -8,43 +10,47 @@ A Python package to automatically generate data dictionaries for clinical datase
 
 ### Metadata Generation
 
-* **Column Descriptions**: AI-generated clinical context for each field
-* **Table Summaries**: Dataset-level documentation
-* **Smart Sampling**: Automatic data type detection with sample values
-* **Pattern Recognition**: Structural pattern analysis to identify identifiers, clinical codes, timestamps, and other semantically meaningful data types
-
-### Relationship Inference
-
-* **Automatic Detection** of relationships across tables
-* **Confidence Scoring** based on name matching and value overlap
-* **Cardinality Estimation** (1:1, 1:N, N:M)
-* **Deduplication** of redundant relationships
-
-### Schema Visualization
-
-* **Mermaid ER Diagrams** (text-based, portable, no dependencies)
-* Easily visualizable via: https://mermaid.live/
-* Compatible with GitHub Markdown and documentation tools
-
-### Multi-Format Outputs
-
-* JSON (machine-readable)
-* Markdown (human-readable)
-* Mermaid diagrams (`.mmd`) for schema visualization
-
-### Flexible LLM Integration
-
-Supports multiple model backends through a unified dispatcher interface:
-
-* **OpenAI**: GPT-4, GPT-4o-mini, and other OpenAI models
-* **Google Gemini**: Gemini-2.5-Flash and other Gemini models
-* **Local models via Ollama**: Llama 3.1 and any other Ollama-compatible model
+- **Column Descriptions**: AI-generated semantic meaning for each field
+- **Table Summaries**: Context-aware descriptions of each table
+- **Smart Sampling**: Automatic data type detection with representative values
+- **Pattern Recognition**: Identification of IDs, timestamps, clinical codes, etc.
 
 ---
 
-## Requirements
+### Relationship Inference
 
-Make sure you have Python 3.8+ installed. All dependencies are automatically installed when you install the package.
+- Automatic detection of relationships across tables
+- Confidence scoring based on name similarity and value overlap
+- Cardinality estimation (1:1, 1:N, N:M)
+- Deduplication of redundant relationships
+
+---
+
+### Schema Visualization
+
+- Generates **Mermaid ER diagrams** (`.mmd`)
+- No system dependencies (no Graphviz required)
+- Compatible with GitHub and https://mermaid.live/
+
+---
+
+### Multi-format Outputs
+
+- `dictionary.json` → full structured metadata
+- `dictionary_summary.md` → human-readable documentation
+- `relationships.json` → structured relationships
+- `relationships_summary.md` → readable relationships
+- `schema_diagram.mmd` → ER diagram
+
+---
+
+### Flexible LLM Support
+
+Supports multiple backends through a unified interface:
+
+- OpenAI models (e.g., GPT-4o, GPT-4o-mini)
+- Google Gemini models
+- Local models via **Ollama** (recommended for privacy)
 
 ---
 
@@ -56,152 +62,192 @@ pip install data-atlas
 
 ---
 
+## LLM Setup (Important)
+
+### Option 1 — Local models (recommended)
+
+Install :contentReference[oaicite:0]{index=0}:
+
+```bash
+# install ollama (see official website)
+ollama pull llama3.1
+```
+
+---
+
+### Option 2 — API-based models
+
+Set your API keys for:
+- OpenAI
+- Google Gemini
+
+---
+
 ## Usage
 
-### Command-line Interface
+### Command Line (main usage)
 
-Once the package is installed, you can use the command line to generate metadata and schema information for your dataset(s).
+After installation, a command is automatically available:
 
 ```bash
-python generate_dictionary.py <folder_path> --output-dir <output_dir> --model <model_name>
+generate-dictionary <folder_path> --output-dir <output_dir>
+```
+
+### Example
+
+```bash
+generate-dictionary data/MIMIC --output-dir output --model llama3.1
 ```
 
 ---
 
-### Parameters
+### ⚙️ Parameters
 
-* `<folder_path>`: Path to the folder containing dataset files (CSV, Excel, or JSON)
-* `<output-dir>`: Directory where outputs will be saved
-* `--model`: Model to use (e.g., `llama3.1`, `gpt-4o-mini`, `gemini-2.5-flash`)
-* `--domain`: Optional domain tag (e.g., "clinical")
-* `--no-relationships`: Disable relationship inference
-* `--min-overlap`: Minimum value overlap (%) for relationship detection (default: 70)
-* `--min-confidence`: Minimum confidence threshold (default: 0.5)
+- `<folder_path>`: Folder containing dataset files (CSV, Excel, JSON)
+- `--output-dir`: Output directory
+- `--model`: LLM model (default: `llama3.1`)
+- `--domain`: Optional domain (e.g., `clinical`)
+- `--no-relationships`: Disable relationship inference
+- `--min-overlap`: Minimum overlap % (default: 80)
+- `--min-confidence`: Minimum confidence (default: 0.7)
 
 ---
 
-## Example
+## Alternative Execution (if CLI not found)
 
-1. **Prepare your data files**
-   Place dataset files in a folder (e.g., `data/MIMIC`)
-
-2. **Run the generator**
+If `generate-dictionary` is not recognized, run:
 
 ```bash
-python -m generate_dictionary.py data/MIMIC --output-dir output --model gpt-4o-mini
+python -m data_dictionary_generator.generate_dictionary <folder_path> --output-dir <output_dir>
 ```
+
+This avoids PATH issues.
 
 ---
 
-## Outputs
+## Output Structure
+
+After execution, the output directory will contain:
 
 ### Data Dictionary
 
-* `dictionary.json`: Full structured metadata
-* `dictionary_summary.md`: Human-readable documentation
+- `dictionary.json`
+- `dictionary_summary.md`
 
 ### Relationships
 
-* `relationships.txt`: Summary of inferred relationships
-* `relationships.json`: Structured relationship data
+- `relationships.json`
+- `relationships_summary.md`
 
-### Schema Diagram
+### Schema
 
-* `schema_diagram.mmd`: Mermaid ER diagram
-
-👉 To visualize:
-
-* Open https://mermaid.live/
-* Paste the `.mmd` content
-* Export as PNG or SVG
+- `schema_diagram.mmd`
 
 ---
 
-## Sample Output
+## Example Output
 
-For each **table**:
+### Table-level
 
-* Table name
-* Number of rows and columns
-* Table description
+- Table name
+- Number of rows
+- Table description
 
-For each **column**:
+### Column-level
 
-* Column name
-* Sample data
-* Data type
-* AI-generated description
+- Column name
+- Data type
+- Sample values
+- AI-generated description
+- Null percentage
 
-For **relationships**:
+### Relationships
 
-* Source and target columns
-* Relationship type (1:1, 1:N, N:M)
-* Confidence score
-* Inference method
+- Source and target columns
+- Relationship type (1:1, 1:N, N:M)
+- Confidence score
+
+---
+
+## Visualization
+
+To visualize schema diagrams:
+
+1. Open https://mermaid.live/
+2. Paste the `.mmd` file content
+3. Export as PNG or SVG
 
 ---
 
 ## Design Principles
 
-* **Augmentation, not replacement**: DataAtlas is intended to support expert curation
-* **Scalable**: Uses sampling and chunk-based processing for large datasets
-* **Portable**: No system dependencies (Mermaid diagrams instead of Graphviz)
-* **Privacy-aware**: Supports fully local deployment
+- **Augmentation, not replacement**: supports expert workflows
+- **Scalable**: handles large datasets via sampling
+- **Portable**: no heavy system dependencies
+- **Privacy-aware**: supports fully local execution
 
 ---
 
 ## Troubleshooting
 
-### 1. Model not found errors
+### 1. Command not found
 
-* **Ollama**: Ensure the model is available locally
+If this fails:
 
-  ```bash
-  ollama run llama3.1
-  ```
-* **OpenAI / Gemini**: Ensure API keys are correctly set
+```bash
+generate-dictionary
+```
 
----
+Try:
 
-### 2. Diagram visualization
+```bash
+python -m data_dictionary_generator.generate_dictionary ...
+```
 
-Mermaid diagrams are saved as `.mmd` files.
-
-To view:
-
-* Go to https://mermaid.live/
-* Paste the file content
+Or ensure your Python `Scripts/` folder is in PATH.
 
 ---
 
-### 3. Dependency issues
+### 2. Model errors
 
-Ensure:
+#### Ollama
 
-* Python version is correct
-* Dependencies in `pyproject.toml` are installed
+```bash
+ollama pull llama3.1
+```
+
+#### API models
+
+Ensure API keys are set correctly.
+
+---
+
+### 3. Missing dependencies
+
+Reinstall:
+
+```bash
+pip install --upgrade data-atlas
+```
 
 ---
 
 ## Contributing
 
-If you would like to contribute:
-
-1. Fork the repository
-2. Create a branch (`git checkout -b feature-name`)
-3. Commit changes (`git commit -am 'Add new feature'`)
-4. Push (`git push origin feature-name`)
-5. Open a pull request
+1. Fork the repository  
+2. Create a branch  
+3. Commit changes  
+4. Push  
+5. Open a pull request  
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see `LICENSE` file.
 
 ---
 
 ## Author
 
 Raffaele Giancotti
-

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "data-atlas"
-version = "0.0.1"
+version = "0.0.3"
 description = "Generate clinical data dictionaries using language models"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -22,6 +22,8 @@ dependencies = [
     "scikit-learn>=1.0.0",
     "reportlab>=3.6.0",
     "tqdm>=4.60.0",
+    "pydantic>=2.0.0",
+    "rapidfuzz>=3.0.0"
 ]
 
 [project.optional-dependencies]
@@ -30,7 +32,7 @@ dev = [
 ]
 
 [project.scripts]
-generate-dictionary = "data_dictionary_generator.generate_dictionary:main"
+generate-dictionary = "data_dictionary_generator.generate_dictionary:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

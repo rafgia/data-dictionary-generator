@@ -4,7 +4,7 @@ import requests
 from typing import Optional
 import logging
 from pydantic import BaseModel, Field
-from metadata_extraction import DatasetMeta, TableMeta, ColumnMeta
+from data_dictionary_generator.metadata_extraction import DatasetMeta, TableMeta, ColumnMeta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

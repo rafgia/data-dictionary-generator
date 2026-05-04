@@ -4,10 +4,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from pydantic import BaseModel, Field
 import warnings
-from pattern_extraction import extract_patterns, detect_semantic_type
-from data_type import infer_column_data_type
-from column_stats import compute_column_stats
-from load_dataset import read_dataset
+from data_dictionary_generator.pattern_extraction import extract_patterns, detect_semantic_type
+from data_dictionary_generator.data_type import infer_column_data_type
+from data_dictionary_generator.column_stats import compute_column_stats
+from data_dictionary_generator.load_dataset import read_dataset
 
 
 class ColumnMeta(BaseModel):

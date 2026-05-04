@@ -3,15 +3,15 @@ import pandas as pd
 import pathlib
 import sys
 import json
-from metadata_extraction import DatasetMeta, extract_dataset_metadata
-from description_generator import (
+from data_dictionary_generator.metadata_extraction import DatasetMeta, extract_dataset_metadata
+from data_dictionary_generator.description_generator import (
     generate_dataset_description,
     generate_table_description,
     generate_single_column_description,
     run_llm_dispatcher
 )
-from relationship_inference import infer_all_relationships, deduplicate_relationships
-from schema_visualization import (generate_er_diagram, save_relationships_summary)
+from data_dictionary_generator.relationship_inference import infer_all_relationships, deduplicate_relationships
+from data_dictionary_generator.schema_visualization import (generate_er_diagram, save_relationships_summary)
 
 def generate_full_metadata_and_descriptions(
     dataset_path: pathlib.Path,
