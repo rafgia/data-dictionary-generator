@@ -8,9 +8,8 @@ from data_dictionary_generator.description_generator import (
     generate_dataset_description,
     generate_table_description,
     generate_single_column_description,
-    run_llm_dispatcher
-)
-from data_dictionary_generator.relationship_inference import infer_all_relationships, deduplicate_relationships
+    run_llm_dispatcher)
+from data_dictionary_generator.llm_relationships_inference import infer_relationships_with_llm
 from data_dictionary_generator.schema_visualization import (generate_er_diagram, save_relationships_summary)
 
 def generate_full_metadata_and_descriptions(
@@ -91,8 +90,7 @@ def cli():
     parser.add_argument("--model", type=str, default="llama3.1")
     parser.add_argument("--domain", type=str, default=None)
     parser.add_argument("--no-relationships", action="store_false", dest="infer_relationships")
-    parser.add_argument("--min-overlap", type=float, default=80.0) 
-    parser.add_argument("--min-confidence", type=float, default=0.7)
+    parser.add_argument("--min-confidence", type=float, default=0.6)
     
     args = parser.parse_args()
     dataset_path, output_dir = pathlib.Path(args.folder_path), pathlib.Path(args.output_dir)
@@ -102,34 +100,54 @@ def cli():
         sys.exit(1)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    dataset_meta = generate_full_metadata_and_descriptions(dataset_path, output_dir, args.model, args.domain)
+    
+    # Generate metadata and descriptions
+    dataset_meta = generate_full_metadata_and_descriptions(
+        dataset_path, output_dir, args.model, args.domain
+    )
+    
     found_any_rels = False
-    if args.infer_relationships:
-        dataframes = {name: getattr(meta, 'dataframe', None) for name, meta in dataset_meta.tables.items()}
-        dataframes = {k: v for k, v in dataframes.items() if v is not None}
-        if len(dataframes) >= 2:
-            print(f"\nInferring relationships between {len(dataframes)} tables...")
-            raw_rels = infer_all_relationships(dataset_meta, dataframes, args.min_overlap, args.min_confidence)
-            relationships = deduplicate_relationships(raw_rels)
-            if relationships:
-                found_any_rels = True
-                rel_summary_path = output_dir / "relationships_summary.md"
-                save_relationships_summary(relationships, rel_summary_path)
-                with open(output_dir / "relationships.json", 'w', encoding='utf-8') as f:
-                    rels_data = [r.model_dump() for r in relationships]
-                    json.dump(rels_data, f, indent=2)
-                generate_er_diagram(dataset_meta, relationships, output_dir / "schema_diagram.mmd")
-            else:
-                print("No strong relationships detected.")
+    if args.infer_relationships and len(dataset_meta.tables) >= 2:
+        # Use LLM to infer relationships
+        relationships = infer_relationships_with_llm(
+            dataset_meta,
+            args.model,
+            run_llm_dispatcher,
+            args.min_confidence
+        )
+        
+        if relationships:
+            found_any_rels = True
+            
+            # Save relationships summary
+            rel_summary_path = output_dir / "relationships_summary.md"
+            save_relationships_summary(relationships, rel_summary_path)
+            
+            # Save as JSON
+            with open(output_dir / "relationships.json", 'w', encoding='utf-8') as f:
+                rels_data = [r.model_dump() for r in relationships]
+                json.dump(rels_data, f, indent=2)
+            
+            # Generate ER diagram
+            generate_er_diagram(dataset_meta, relationships, output_dir / "schema_diagram.mmd")
+            
+            print(f"\nFound {len(relationships)} relationships")
+        else:
+            print("\nNo relationships detected")
 
+    # Save outputs
     save_markdown_summary(dataset_meta, output_dir / "dictionary_summary.md")
+    
+    # Clean up dataframes before saving JSON
     for table_meta in dataset_meta.tables.values():
         if hasattr(table_meta, "dataframe"):
             table_meta.dataframe = None
     
     save_metadata_to_json(dataset_meta, output_dir / "dictionary.json")
+    
     if found_any_rels:
-        print(f"Diagram saved to: {output_dir / 'schema_diagram.mmd'}")
+        print(f"\nDiagram saved to: {output_dir / 'schema_diagram.mmd'}")
+        print(f"Summary saved to: {output_dir / 'relationships_summary.md'}")
 
 if __name__ == "__main__":
     cli()

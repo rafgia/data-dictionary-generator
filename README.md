@@ -101,15 +101,14 @@ generate-dictionary data/MIMIC --output-dir output --model llama3.1
 
 ---
 
-### ⚙️ Parameters
+### Parameters
 
 - `<folder_path>`: Folder containing dataset files (CSV, Excel, JSON)
 - `--output-dir`: Output directory
 - `--model`: LLM model (default: `llama3.1`)
 - `--domain`: Optional domain (e.g., `clinical`)
 - `--no-relationships`: Disable relationship inference
-- `--min-overlap`: Minimum overlap % (default: 80)
-- `--min-confidence`: Minimum confidence (default: 0.7)
+- `--min-confidence`: Minimum confidence (default: 0.6)
 
 ---
 
@@ -166,6 +165,7 @@ After execution, the output directory will contain:
 - Source and target columns
 - Relationship type (1:1, 1:N, N:M)
 - Confidence score
+- Reasoning
 
 ---
 

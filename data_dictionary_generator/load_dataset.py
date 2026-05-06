@@ -32,3 +32,4 @@ def read_dataset(path: pathlib.Path) -> pd.DataFrame:
 
     except Exception as e:
         raise RuntimeError(f"Failed to read dataset from {path}: {e}") from e
+    

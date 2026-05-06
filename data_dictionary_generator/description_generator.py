@@ -192,32 +192,26 @@ def get_cost_summary() -> dict:
     """
     return COST_TRACKER
 
-def _run_openai_model(prompt: str, model: str) -> Optional[str]:
-    """
-    Call OpenAI for description generation with incremental cost tracking.
-    """
+def _run_openai_model(prompt: str, model: str, system_message: str = None) -> Optional[str]:
     try:
         api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
+        if not api_key: raise ValueError("OPENAI_API_KEY not set")
 
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
+        
+        # Use provided system message OR fallback to description prompt
+        default_sys = ("You are a precise metadata expert. "
+                       "Write extremely concise, factual descriptions (max 15 words).")
+        
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a precise metadata expert. "
-                        "You write extremely concise, factual descriptions based ONLY on provided context. "
-                        "Do not use filler words. Strictly adhere to word limits (max 15 words)."
-                    )
-                },
+                {"role": "system", "content": system_message or default_sys},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1,
-            max_tokens=50,
+            max_tokens=1000 if system_message else 50,
         )
 
         response_text = response.choices[0].message.content.strip()
@@ -254,74 +248,77 @@ def _run_openai_model(prompt: str, model: str) -> Optional[str]:
             f"| This call=${cost:.6f} | Total=${COST_TRACKER['total_cost']:.6f}"
         )
 
-        return _post_process_response(response_text)
+        return response_text
 
     except Exception as e:
-        logger.error(f"OpenAI API error for model {model}: {e}")
+        logger.error(f"OpenAI error: {e}")
         return None
     
-def _run_gemini_model(prompt: str, model: str) -> Optional[str]:
-    """
-    Runs Google Gemini models (via google-generativeai).
-    """
+def _run_gemini_model(prompt: str, model: str, system_message: str = None) -> Optional[str]:
     try:
         api_key = os.environ.get("GEMINI_API_COST_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable not set")
+        if not api_key: raise ValueError("GEMINI_API_KEY not set")
 
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        gem_model = genai.GenerativeModel(model)
+        
+        # Pass system_instruction here
+        gem_model = genai.GenerativeModel(
+            model_name=model,
+            system_instruction=system_message
+        )
+        
         response = gem_model.generate_content(prompt)
-        response_text = response.text.strip() if hasattr(response, "text") else ""
-        return _post_process_response(response_text)
+        return response.text.strip() if hasattr(response, "text") else ""
     except Exception as e:
-        logger.error(f"Gemini API error for model {model}: {e}")
+        logger.error(f"Gemini error: {e}")
         return None
 
-def run_ollama_model(prompt: str, model: str) -> Optional[str]:
+def run_ollama_model(prompt: str, model: str, system_message: str = None) -> Optional[str]:
     """
-    Call local Ollama API for concise descriptions.
+    Call local Ollama API for concise descriptions or JSON relationships.
     """
     API_ENDPOINT = f"{OLLAMA_URL}/api/generate"
     try:
-        num_predict = 50
+        num_predict = 1000 if system_message else 50
         
         payload = {
             "model": model,
             "prompt": prompt,
+            "system": system_message,
             "stream": False,
             "options": {
                 "temperature": 0.1,
                 "num_predict": num_predict
             }
         }
-        
+
         response = requests.post(API_ENDPOINT, json=payload)
         response.raise_for_status()
         
         response_data = response.json()
         raw_text = response_data.get("response", "").strip()
-        return _post_process_response(raw_text)
+        return raw_text
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Ollama API call failed for model {model}: {e}")
         return None
 
 
-def run_llm_dispatcher(prompt: str, model: str) -> Optional[str]:
-    """
-    Routes the prompt to the correct LLM implementation (OpenAI, Gemini or Ollama).
-    """
+def run_llm_dispatcher(prompt: str, model: str, system_message: str = None, is_json: bool = False) -> Optional[str]:
     model_lower = model.lower()
-
-    # OpenAI Models
+    
     if model_lower in [m.lower() for m in OPENAI_MODELS] or model_lower.startswith("gpt-"):
-        return _run_openai_model(prompt, model)
+        response_text = _run_openai_model(prompt, model, system_message)
+    elif model_lower.startswith("gemini"):
+        response_text = _run_gemini_model(prompt, model, system_message)
+    else:
+        response_text = run_ollama_model(prompt, model, system_message)
 
-    # Google Gemini Models
-    if model_lower.startswith("gemini"):
-        return _run_gemini_model(prompt, model)
+    if not response_text:
+        return None
 
-    # Local Ollama
-    return run_ollama_model(prompt, model)
+    if is_json:
+        return response_text
+    
+    return _post_process_response(response_text)

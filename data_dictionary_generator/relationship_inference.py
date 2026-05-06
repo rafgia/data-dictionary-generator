@@ -1,131 +1,162 @@
 import pathlib
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
 
 class RelationshipMeta(BaseModel):
     from_table: str
     from_column: str
     to_table: str
     to_column: str
-    relationship_type: str 
-    confidence: float 
-    inference_method: str 
-    
-    class Config:
-        extra = 'allow'
+    relationship_type: str
+    confidence: float
 
-false_positives = {'age', 'value', 'label', 'unit', 'description', 'causes', 'full_name'} # can cause false positives in value overlap
+    class Config:
+        extra = "allow"
 
 def normalize_column_name(col_name: str) -> str:
     normalized = col_name.lower().strip().replace(" ", "_").replace("-", "_")
-    for suffix in ['_id', 'id', '_key', 'key', '_code', 'code']:
+    for suffix in ["_id", "id", "_key", "key", "_code", "code"]:
         if normalized.endswith(suffix) and len(normalized) > len(suffix):
             normalized = normalized[:-len(suffix)]
             break
     return normalized
 
-def calculate_value_overlap(series1: pd.Series, series2: pd.Series, sample_size: int = 10000) -> float:
-    s1_clean = series1.dropna()
-    s2_clean = series2.dropna()
-    if len(s1_clean) == 0 or len(s2_clean) == 0:
+def calculate_containment(child: pd.Series, parent: pd.Series, sample_size: int = 10000) -> float:
+    child_clean = child.dropna()
+    parent_clean = parent.dropna()
+    if len(child_clean) == 0 or len(parent_clean) == 0:
         return 0.0
-    
-    if len(s1_clean) > sample_size:
-        s1_clean = s1_clean.sample(sample_size, random_state=42)
-    
-    set1 = set(s1_clean.astype(str).unique())
-    set2 = set(s2_clean.astype(str).unique())
-    
-    if not set1:
+    if len(child_clean) > sample_size:
+        child_clean = child_clean.sample(sample_size, random_state=42)
+    child_set = set(child_clean.astype(str).unique())
+    parent_set = set(parent_clean.astype(str).unique())
+    if not child_set:
         return 0.0
-    
-    overlap = len(set1.intersection(set2))
-    return (overlap / len(set1)) * 100
+    child_values = child_clean.astype(str)
+    parent_set = set(parent_clean.astype(str))
 
-def infer_cardinality(from_series: pd.Series, to_series: pd.Series) -> str:
-    from_unique = from_series.nunique() / len(from_series) if len(from_series) > 0 else 0
-    to_unique = to_series.nunique() / len(to_series) if len(to_series) > 0 else 0
-    
-    if from_unique > 0.98 and to_unique > 0.98:
+    return child_values.isin(parent_set).mean()
+
+def infer_cardinality(parent_series: pd.Series, child_series: pd.Series) -> str:
+    parent_unique = parent_series.nunique() / len(parent_series) if len(parent_series) > 0 else 0
+    child_unique = child_series.nunique() / len(child_series) if len(child_series) > 0 else 0
+    if parent_unique > 0.85 and child_unique < 0.85:
+        return "1:N"
+    elif parent_unique > 0.85 and child_unique > 0.85:
         return "1:1"
-    elif from_unique > 0.98:
-        return "1:N" 
-    elif to_unique > 0.98:
-        return "N:1" 
     else:
         return "N:M"
 
 def detect_relationships_between_tables(
     table1_name: str, table1_meta, table1_df: pd.DataFrame,
     table2_name: str, table2_meta, table2_df: pd.DataFrame,
-    min_overlap_threshold: float = 80.0,
+    min_containment_threshold: float = 0.3,
     min_confidence: float = 0.7
 ) -> List[RelationshipMeta]:
-    relationships = []
-    
-    for col1_name, col1_meta in table1_meta.columns.items():
-        if col1_name.lower() in false_positives: continue
-            
-        for col2_name, col2_meta in table2_meta.columns.items():
-            if col2_name.lower() in false_positives: continue
-            if col1_meta.data_type != col2_meta.data_type: continue
-            if col1_meta.data_type in ["datetime", "float"]: continue
-            
-            norm_col1 = normalize_column_name(col1_name)
-            norm_col2 = normalize_column_name(col2_name)
-            
-            name_match_score = 0.0
-            inference_methods = []
-            
-            if norm_col1 == norm_col2:
-                name_match_score = 0.5
-                inference_methods.append("exact_name_match")
-            
-            overlap_percentage = calculate_value_overlap(table1_df[col1_name], table2_df[col2_name])
-            if overlap_percentage < min_overlap_threshold:
-                continue
+    stats = {
+    "total_pairs": 0,
+    "parent_invalid": 0,
+    "parent_low_unique": 0,
+    "child_invalid": 0,
+    "dtype_mismatch": 0,
+    "low_containment": 0,
+    "low_confidence": 0,
+    "accepted": 0}
 
-            overlap_score = (overlap_percentage / 100.0) * 0.5
-            inference_methods.append(f"overlap_{overlap_percentage:.1f}%")
-            
-            confidence = name_match_score + overlap_score
-            
-            if confidence >= min_confidence:
-                cardinality = infer_cardinality(table1_df[col1_name], table2_df[col2_name])
-                relationships.append(RelationshipMeta(
-                    from_table=table1_name, from_column=col1_name,
-                    to_table=table2_name, to_column=col2_name,
-                    relationship_type=cardinality, confidence=confidence,
-                    inference_method=" + ".join(inference_methods)
-                ))
+    relationships = []
+    temporal_keywords = ["time", "date", "timestamp"]
+    
+
+    def is_valid(col_name, col_meta, series):
+        name = col_name.lower()
+        if any(k in name for k in ["time", "date", "timestamp"]):
+            return False
+        return True
+    table_pairs = [
+        (table1_name, table1_meta, table1_df, table2_name, table2_meta, table2_df),
+        (table2_name, table2_meta, table2_df, table1_name, table1_meta, table1_df),
+    ]
+    for parent_table, parent_meta, parent_df, child_table, child_meta, child_df in table_pairs:
+        for parent_col, parent_col_meta in parent_meta.columns.items():
+            parent_series = parent_df[parent_col]
+            parent_unique_ratio = parent_series.nunique() / len(parent_series) if len(parent_series) else 0
+            if parent_unique_ratio < 0.9:
+                stats["parent_low_unique"] += 1
+                continue
+            if not is_valid(parent_col, parent_col_meta, parent_series):
+                stats["parent_invalid"] += 1
+                continue
+            parent_unique_ratio = parent_series.nunique() / len(parent_series) if len(parent_series) else 0
+            if parent_unique_ratio < 0.8:
+                continue
+            for child_col, child_col_meta in child_meta.columns.items():
+                stats["total_pairs"] += 1
+                child_series = child_df[child_col]
+                if not is_valid(child_col, child_col_meta, child_series):
+                    stats["child_invalid"] += 1
+                    continue
+                norm_parent = normalize_column_name(parent_col)
+                norm_child = normalize_column_name(child_col)
+                name_match_score = 0.0
+                if norm_parent == norm_child:
+                    name_match_score = 0.6
+                if "id" in parent_col.lower() and "id" in child_col.lower():
+                    name_match_score = max(name_match_score, 0.8)
+                containment = calculate_containment(child_series, parent_series)
+                if containment < min_containment_threshold:
+                    stats["low_containment"] += 1
+                    continue
+                confidence = max(name_match_score, containment)
+                if norm_parent.endswith("id") or norm_child.endswith("id"):
+                    confidence += 0.1
+                if confidence < min_confidence:
+                    stats["low_confidence"] += 1
+                    continue
+                stats["accepted"] += 1
+                cardinality = infer_cardinality(parent_series, child_series)
+                relationships.append(
+                    RelationshipMeta(
+                        from_table=parent_table,
+                        from_column=parent_col,
+                        to_table=child_table,
+                        to_column=child_col,
+                        relationship_type=cardinality,
+                        confidence=confidence,
+                    )
+                )
+    print(f"\n[STATS] {table1_name} ↔ {table2_name}")
+    for k, v in stats.items():
+        print(f"{k}: {v}")
     return relationships
 
 def infer_all_relationships(
-    dataset_meta, 
-    dataframes: Dict[str, pd.DataFrame], 
-    min_overlap: float, 
+    dataset_meta,
+    dataframes: Dict[str, pd.DataFrame],
+    min_containment_threshold: float,
     min_confidence: float
 ) -> List[RelationshipMeta]:
+
     all_relationships = []
     table_names = list(dataset_meta.tables.keys())
-    
-    for i, t1_name in enumerate(table_names):
-        for t2_name in table_names[i+1:]:
+    for i, t1 in enumerate(table_names):
+        for t2 in table_names[i + 1:]:
             rels = detect_relationships_between_tables(
-                t1_name, dataset_meta.tables[t1_name], dataframes[t1_name],
-                t2_name, dataset_meta.tables[t2_name], dataframes[t2_name],
-                min_overlap, min_confidence
+                t1, dataset_meta.tables[t1], dataframes[t1],
+                t2, dataset_meta.tables[t2], dataframes[t2],
+                min_containment_threshold,
+                min_confidence
             )
             all_relationships.extend(rels)
     return all_relationships
 
 def deduplicate_relationships(relationships: List[RelationshipMeta]) -> List[RelationshipMeta]:
-    relationship_map = {}
+    best = {}
     for rel in relationships:
-        table_pair = tuple(sorted([rel.from_table, rel.to_table]))
-        key = (table_pair, rel.from_column if rel.from_table < rel.to_table else rel.to_column)
-        
-        if key not in relationship_map or rel.confidence > relationship_map[key].confidence:
-            relationship_map[key] = rel
-    return list(relationship_map.values())
+        key = tuple(sorted([rel.from_table, rel.to_table])) + (
+            rel.from_column if rel.from_table < rel.to_table else rel.to_column,
+        )
+        if key not in best or rel.confidence > best[key].confidence:
+            best[key] = rel
+    return list(best.values())
