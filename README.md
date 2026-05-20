@@ -20,17 +20,9 @@ It supports CSV, Excel, and JSON datasets, and produces rich metadata including 
 ### Relationship Inference
 
 - Automatic detection of relationships across tables
-- Confidence scoring based on name similarity and value overlap
 - Cardinality estimation (1:1, 1:N, N:M)
 - Deduplication of redundant relationships
-
----
-
-### Schema Visualization
-
-- Generates **Mermaid ER diagrams** (`.mmd`)
-- No system dependencies (no Graphviz required)
-- Compatible with GitHub and https://mermaid.live/
+- PostgreSQL schema generation
 
 ---
 
@@ -38,9 +30,8 @@ It supports CSV, Excel, and JSON datasets, and produces rich metadata including 
 
 - `dictionary.json` → full structured metadata
 - `dictionary_summary.md` → human-readable documentation
-- `relationships.json` → structured relationships
-- `relationships_summary.md` → readable relationships
-- `schema_diagram.mmd` → ER diagram
+- `schema.json` → structured relationships
+- `schema.sql` → PostgreSQL schema
 
 ---
 
@@ -66,7 +57,7 @@ pip install data-atlas
 
 ### Option 1 — Local models (recommended)
 
-Install :contentReference[oaicite:0]{index=0}:
+Install :
 
 ```bash
 # install ollama (see official website)
@@ -107,8 +98,7 @@ generate-dictionary data/MIMIC --output-dir output --model llama3.1
 - `--output-dir`: Output directory
 - `--model`: LLM model (default: `llama3.1`)
 - `--domain`: Optional domain (e.g., `clinical`)
-- `--no-relationships`: Disable relationship inference
-- `--min-confidence`: Minimum confidence (default: 0.6)
+- `--no-schema`: Disable relationship inference
 
 ---
 
@@ -135,12 +125,11 @@ After execution, the output directory will contain:
 
 ### Relationships
 
-- `relationships.json`
-- `relationships_summary.md`
+- `schema.json`
 
 ### Schema
 
-- `schema_diagram.mmd`
+- `schema.sql`
 
 ---
 
@@ -164,8 +153,7 @@ After execution, the output directory will contain:
 
 - Source and target columns
 - Relationship type (1:1, 1:N, N:M)
-- Confidence score
-- Reasoning
+- PostgreSQL schema
 
 ---
 
@@ -173,8 +161,8 @@ After execution, the output directory will contain:
 
 To visualize schema diagrams:
 
-1. Open https://mermaid.live/
-2. Paste the `.mmd` file content
+1. Open https://dbdiagram.io/
+2. Import the PostgreSQL schema 
 3. Export as PNG or SVG
 
 ---

@@ -80,8 +80,10 @@ def detect_semantic_type(series: pd.Series, column_name: str = "") -> Optional[s
     inferred_dtype = infer_column_data_type(series) 
     
     if inferred_dtype == "float":
-        if series.min() >= 0 and series.max() <= 1:
-            return "probability_score"
+        numeric = pd.to_numeric(series, errors="coerce").dropna()
+        if len(numeric) > 0:
+            if numeric.min() >= 0 and numeric.max() <= 1:
+                return "probability_score"
             
     if inferred_dtype == "boolean":
          return "flag_binary"

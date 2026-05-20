@@ -9,7 +9,8 @@ from data_dictionary_generator.metadata_extraction import DatasetMeta, TableMeta
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]
+OPENAI_MODELS = ["gpt-5.5","gpt-5.4","gpt-5.4-mini","gpt-5","gpt-5-mini","gpt-5-nano","gpt-5-pro","gpt-5.5-pro",
+    "gpt-4.1","gpt-4o","gpt-4o-mini","gpt-4-turbo","gpt-4","gpt-3.5-turbo"]
 OLLAMA_URL = "http://localhost:11434"
 
 DATASET_PROMPT_TEMPLATE = """
@@ -74,6 +75,11 @@ Table context:
 
 Column metadata:
 - Name: {{column_name}}
+- Type: {{type}}
+- Sample Values: {{samples}}
+- Unique Values: {{unique}}
+- Null Percentage: {{null_percent}}
+- Summary Statistics: {{stats_summary}}
 
 
 Output:
@@ -109,7 +115,7 @@ def _format_sample_rows(table_meta: TableMeta) -> str:
         return "N/A"
     return "\n".join([str(row) for row in table_meta.sample_rows])
 
-def generate_dataset_description(dataset_meta: DatasetMeta, model: str, llm_function) -> str:
+def generate_dataset_description(dataset_meta: DatasetMeta, model: str, llm_function, **kwargs) -> str:
     table_counts = {t_name: t_meta.row_count for t_name, t_meta in dataset_meta.tables.items()}
     time_range = (f"{dataset_meta.time_period_covered.get('start')} to "
                   f"{dataset_meta.time_period_covered.get('end')}") if dataset_meta.time_period_covered else "N/A"
@@ -119,10 +125,12 @@ def generate_dataset_description(dataset_meta: DatasetMeta, model: str, llm_func
                                     .replace("{{table_row_counts}}", str(table_counts))\
                                     .replace("{{time_range}}", time_range)
 
-    description = llm_function(prompt, model)
+    # Pass the kwargs through here
+    description = llm_function(prompt, model, **kwargs)
     return description or f"Dataset containing {len(dataset_meta.list_of_tables)} tables covering {dataset_meta.domain_covered or 'unspecified domain'}."
 
-def generate_table_description(table_meta: TableMeta, dataset_name: str, dataset_description: str, dataset_domain: str, model: str, llm_function) -> str:
+
+def generate_table_description(table_meta: TableMeta, dataset_name: str, dataset_description: str, dataset_domain: str, model: str, llm_function, **kwargs) -> str:
     col_list_types = ", ".join([f"{col_name} ({meta.data_type})" for col_name, meta in table_meta.columns.items()])
     sample_rows = _format_sample_rows(table_meta)
 
@@ -134,10 +142,12 @@ def generate_table_description(table_meta: TableMeta, dataset_name: str, dataset
                                   .replace("{{n_rows}}", str(table_meta.row_count))\
                                   .replace("{{sample_rows}}", sample_rows)
 
-    description = llm_function(prompt, model)
+    # Pass the kwargs through here
+    description = llm_function(prompt, model, **kwargs)
     return description or f"Table {table_meta.table_name} with {table_meta.number_of_columns} columns and {table_meta.row_count} rows."
 
-def generate_single_column_description(column_meta: ColumnMeta, table_name: str, table_description: str, dataset_name: str, dataset_description: str, dataset_domain: str, model: str, llm_function) -> str:
+
+def generate_single_column_description(column_meta: ColumnMeta, table_name: str, table_description: str, dataset_name: str, dataset_description: str, dataset_domain: str, model: str, llm_function, **kwargs) -> str:
     null_percent = _calculate_null_percent(column_meta)
     stats_summary = _format_column_stats(column_meta)
     samples_str = ", ".join([str(s) for s in column_meta.sample_values]) if column_meta.sample_values else "N/A"
@@ -156,7 +166,8 @@ def generate_single_column_description(column_meta: ColumnMeta, table_name: str,
                                    .replace("{{null_percent}}", null_percent)\
                                    .replace("{{stats_summary}}", stats_summary)
 
-    response = llm_function(prompt, model)
+    # Pass the kwargs through here
+    response = llm_function(prompt, model, **kwargs)
     return response if response else f"Column of type {type_str}."
 
 def _post_process_response(response_text: str) -> str:
@@ -192,7 +203,7 @@ def get_cost_summary() -> dict:
     """
     return COST_TRACKER
 
-def _run_openai_model(prompt: str, model: str, system_message: str = None) -> Optional[str]:
+def _run_openai_model(prompt: str, model: str, system_message: str = None, temperature: float = 0.1) -> Optional[str]:
     try:
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key: raise ValueError("OPENAI_API_KEY not set")
@@ -210,8 +221,8 @@ def _run_openai_model(prompt: str, model: str, system_message: str = None) -> Op
                 {"role": "system", "content": system_message or default_sys},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1,
-            max_tokens=1000 if system_message else 50,
+            temperature=temperature,
+            max_completion_tokens=1000 if system_message else 50,
         )
 
         response_text = response.choices[0].message.content.strip()
@@ -226,10 +237,19 @@ def _run_openai_model(prompt: str, model: str, system_message: str = None) -> Op
 
         # Pricing table (per 1k tokens)
         model_costs = {
-            "gpt-4": (0.03, 0.06),
-            "gpt-4-turbo": (0.01, 0.03),
-            "gpt-4o": (0.005, 0.015),
+            "gpt-5.5": (0.005, 0.03),
+            "gpt-5.4": (0.0025, 0.015),
+            "gpt-5.4-mini": (0.00075, 0.0045),
+            "gpt-5": (0.00125, 0.01),
+            "gpt-5-mini": (0.00025, 0.002),
+            "gpt-5-nano": (0.00005, 0.0004),
+            "gpt-5-pro": (0.015, 0.12),
+            "gpt-5.5-pro": (0.03, 0.18),
+            "gpt-4.1": (0.002, 0.008),
+            "gpt-4o": (0.0025, 0.01),
             "gpt-4o-mini": (0.00015, 0.0006),
+            "gpt-4-turbo": (0.01, 0.03),
+            "gpt-4": (0.03, 0.06),
             "gpt-3.5-turbo": (0.0005, 0.0015),
         }
         prompt_cost_per_1k, completion_cost_per_1k = model_costs.get(model, (0.005, 0.015))
@@ -274,7 +294,7 @@ def _run_gemini_model(prompt: str, model: str, system_message: str = None) -> Op
         logger.error(f"Gemini error: {e}")
         return None
 
-def run_ollama_model(prompt: str, model: str, system_message: str = None) -> Optional[str]:
+def run_ollama_model(prompt: str, model: str, system_message: str = None, temperature: float = 0.1) -> Optional[str]:
     """
     Call local Ollama API for concise descriptions or JSON relationships.
     """
@@ -288,7 +308,7 @@ def run_ollama_model(prompt: str, model: str, system_message: str = None) -> Opt
             "system": system_message,
             "stream": False,
             "options": {
-                "temperature": 0.1,
+                "temperature": temperature,
                 "num_predict": num_predict
             }
         }
@@ -305,15 +325,15 @@ def run_ollama_model(prompt: str, model: str, system_message: str = None) -> Opt
         return None
 
 
-def run_llm_dispatcher(prompt: str, model: str, system_message: str = None, is_json: bool = False) -> Optional[str]:
+def run_llm_dispatcher(prompt: str, model: str, system_message: str = None, is_json: bool = False, temperature=0.1) -> Optional[str]:
     model_lower = model.lower()
     
     if model_lower in [m.lower() for m in OPENAI_MODELS] or model_lower.startswith("gpt-"):
-        response_text = _run_openai_model(prompt, model, system_message)
+        response_text = _run_openai_model(prompt, model, system_message, temperature)
     elif model_lower.startswith("gemini"):
         response_text = _run_gemini_model(prompt, model, system_message)
     else:
-        response_text = run_ollama_model(prompt, model, system_message)
+        response_text = run_ollama_model(prompt, model, system_message, temperature)
 
     if not response_text:
         return None
