@@ -1,5 +1,6 @@
 from dateutil.parser import parse as dateparse
 import pandas as pd
+import datetime
 import re
 
 _date_pattern = re.compile(
@@ -13,6 +14,8 @@ def infer_data_type(value) -> str:
         return "null"
     if isinstance(value, bool):
         return "boolean"
+    if isinstance(value, datetime.date):
+        return "datetime"
     if isinstance(value, int):
         return "integer"
     if isinstance(value, float):
@@ -25,6 +28,14 @@ def infer_data_type(value) -> str:
     lower = v.lower()
     if lower in ("true", "false", "yes", "no", "y", "n", "t", "f"):
         return "boolean"
+
+    if _date_pattern.search(v):
+        try:
+            dateparse(v, fuzzy=False)
+            return "datetime"
+        except (ValueError, OverflowError):
+            pass
+
     temp_v = v.replace(",", "")
     has_sign = temp_v.startswith(("+", "-"))
     numeric_part = temp_v[1:] if has_sign else temp_v
@@ -40,13 +51,6 @@ def infer_data_type(value) -> str:
         return "float"
     except ValueError:
         pass
-
-    if _date_pattern.search(v):
-        try:
-            dateparse(v, fuzzy=False)
-            return "datetime"
-        except (ValueError, OverflowError):
-            pass
 
     return "string"
 

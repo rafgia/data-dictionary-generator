@@ -203,29 +203,60 @@ def get_cost_summary() -> dict:
     """
     return COST_TRACKER
 
-def _run_openai_model(prompt: str, model: str, system_message: str = None, temperature: float = 0.1) -> Optional[str]:
+def _run_openai_model(
+    prompt: str,
+    model: str,
+    system_message: str = None,
+    temperature: float = 0.1,
+    max_output_tokens: Optional[int] = None,
+) -> Optional[str]:
+
     try:
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key: raise ValueError("OPENAI_API_KEY not set")
 
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
-        
+
         # Use provided system message OR fallback to description prompt
         default_sys = ("You are a precise metadata expert. "
                        "Write extremely concise, factual descriptions (max 15 words).")
-        
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_message or default_sys},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=temperature,
-            max_completion_tokens=1000 if system_message else 50,
-        )
+        if model.startswith("gpt-5"):
+            request_kwargs = dict(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_message or default_sys},
+                    {"role": "user", "content": prompt}
+                ],
+                max_completion_tokens=max_output_tokens or (1000 if system_message else 500),
+                reasoning_effort="minimal",
+            )
+            try:
+                response = client.chat.completions.create(**request_kwargs)
+            except Exception:
+                request_kwargs.pop("reasoning_effort", None)
+                response = client.chat.completions.create(**request_kwargs)
+        else:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_message or default_sys},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=temperature,
+                max_tokens=max_output_tokens or (1000 if system_message else 50),
+            )
 
-        response_text = response.choices[0].message.content.strip()
+        finish_reason = getattr(response.choices[0], "finish_reason", None)
+        if finish_reason == "length":
+            logger.warning(
+                f"OpenAI response for model={model} was truncated by the token "
+                f"budget (finish_reason='length'). If this call expected JSON "
+                f"output, the response is likely incomplete/unparseable - "
+                f"consider raising max_output_tokens for this call."
+            )
+
+        response_text = (response.choices[0].message.content or "").strip()
 
         # Token usage
         usage = getattr(response, "usage", None)
@@ -294,14 +325,20 @@ def _run_gemini_model(prompt: str, model: str, system_message: str = None) -> Op
         logger.error(f"Gemini error: {e}")
         return None
 
-def run_ollama_model(prompt: str, model: str, system_message: str = None, temperature: float = 0.1) -> Optional[str]:
+def run_ollama_model(
+    prompt: str,
+    model: str,
+    system_message: str = None,
+    temperature: float = 0.1,
+    max_output_tokens: Optional[int] = None,
+) -> Optional[str]:
     """
     Call local Ollama API for concise descriptions or JSON relationships.
     """
     API_ENDPOINT = f"{OLLAMA_URL}/api/generate"
     try:
-        num_predict = 1000 if system_message else 50
-        
+        num_predict = max_output_tokens or (1000 if system_message else 50)
+
         payload = {
             "model": model,
             "prompt": prompt,
@@ -325,15 +362,23 @@ def run_ollama_model(prompt: str, model: str, system_message: str = None, temper
         return None
 
 
-def run_llm_dispatcher(prompt: str, model: str, system_message: str = None, is_json: bool = False, temperature=0.1) -> Optional[str]:
+def run_llm_dispatcher(
+    prompt: str,
+    model: str,
+    system_message: str = None,
+    is_json: bool = False,
+    temperature=0.1,
+    max_output_tokens: Optional[int] = None,
+) -> Optional[str]:
+
     model_lower = model.lower()
-    
+
     if model_lower in [m.lower() for m in OPENAI_MODELS] or model_lower.startswith("gpt-"):
-        response_text = _run_openai_model(prompt, model, system_message, temperature)
+        response_text = _run_openai_model(prompt, model, system_message, temperature, max_output_tokens)
     elif model_lower.startswith("gemini"):
         response_text = _run_gemini_model(prompt, model, system_message)
     else:
-        response_text = run_ollama_model(prompt, model, system_message, temperature)
+        response_text = run_ollama_model(prompt, model, system_message, temperature, max_output_tokens)
 
     if not response_text:
         return None
